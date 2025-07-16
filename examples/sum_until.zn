@@ -1,12 +1,9 @@
 func sum_until(upper : i32, threshold : i32) -> i32 {
     let sum : i32 = 0;
-    for i in 0..100 {
+    for i in 0..upper {
         sum += i;
         if sum > threshold {
-            return 2;
-        }
-        else {
-            return 1.0;
+            return i;
         }
     }
     return 0;

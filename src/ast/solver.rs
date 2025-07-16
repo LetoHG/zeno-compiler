@@ -141,9 +141,11 @@ impl ASTVisitor<Option<()>> for ASTSolver {
             for scope in self.scopes.iter_mut().rev() {
                 if let Some(value) = scope.get_mut(&loop_var) {
                     *value = i as f64;
+                    break;
                 }
             }
             if ret.is_some() {
+                self.leave_scope();
                 return ret;
             }
         }
@@ -162,6 +164,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
 
             let ret = self.visit_statement(&statement.body);
             if ret.is_some() {
+                self.leave_scope();
                 return ret;
             }
         }
@@ -182,6 +185,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(value) = scope.get_mut(&expr.identifier.span.literal) {
                 *value = self.result.unwrap();
+                break;
             }
         }
         None
