@@ -1,15 +1,18 @@
-func sum_until(upper : i32, threshold : i32) -> f32 {
-    let sum : i32 = 0.0;
+func sum_until(upper : i32, threshold : i32) -> i32 {
+    let sum : i32 = 0;
     for i in 0..100 {
         sum += i;
         if sum > threshold {
-            return i;
+            return 2;
+        }
+        else {
+            return 1.0;
         }
     }
     return 0;
 }
 
 
-func main() {
+func main() -> i32 {
     return sum_until(20, 27);
 }

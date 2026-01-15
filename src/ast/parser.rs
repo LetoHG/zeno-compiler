@@ -130,10 +130,10 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> ASTStatement {
-        self.consume_expected(TokenKind::Return);
+        let keyword = self.consume_expected(TokenKind::Return).clone();
         let expr = self.parse_expression();
         self.consume_expected(TokenKind::SemiColon);
-        ASTStatement::return_statement(expr)
+        ASTStatement::return_statement(keyword, expr)
     }
 
     fn parse_let_statement(&mut self) -> ASTStatement {

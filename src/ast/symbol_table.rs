@@ -158,10 +158,9 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                             "Expected return type of type {:?} but found {:?}",
                             expeceted, actual
                         ),
-                        // TODO(letohg): [2025-07-18] track source_text location on ASTReturnStatement
                         super::lexer::TextSpan {
-                            start: 0,
-                            end: 0,
+                            start: statement.keyword.span.start,
+                            end: statement.keyword.span.end,
                             literal: "return".to_string(),
                         },
                     );
@@ -255,17 +254,29 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
 
             Pass::TypeCheck => {
                 self.enter_scope();
-                let mut first_return = Some(DataType::Void);
+                let mut first_return = None;
                 for statement in statement.statements.iter() {
                     let return_type = self.visit_statement(statement);
+
                     match statement.kind {
-                        ASTStatementKind::Return(_) => {
-                            match first_return {
-                                Some(DataType::Void) => {
-                                    first_return = return_type;
+                        ASTStatementKind::Return(_)
+                        | ASTStatementKind::Compound(_)
+                        | ASTStatementKind::For(_)
+                        | ASTStatementKind::While(_)
+                        | ASTStatementKind::If(_) => {
+                            if let (Some(x), Some(y)) =
+                                (first_return.as_ref(), return_type.as_ref())
+                            {
+                                if x != y {
+                                    println!(
+                                        "Return Type differs from previous return paths: {:?} {:?}",
+                                        x, y
+                                    );
                                 }
-                                _ => {}
-                            };
+                                // no assignment here
+                            } else if first_return.is_none() {
+                                first_return = return_type;
+                            }
                         }
                         _ => {}
                     }
@@ -281,18 +292,38 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::CollectSymbols => {
                 self.diagnostics.borrow_mut().report_error(
                     format!("If statement not allowed outside of functions"),
-                    super::lexer::TextSpan {
-                        start: 0,
-                        end: 0,
-                        literal: "if".to_string(),
-                    },
+                    statement.keyword.span.clone(),
                 );
                 None
             }
             Pass::TypeCheck => {
                 let condition_type = self.visit_expression(&statement.condition)?;
 
-                None
+                let then_return_type = self.visit_statement(&statement.then_branch);
+
+                println!("Then Branch {:?}", then_return_type);
+                if let Some(else_branch) = &statement.else_branch {
+                    println!("Branches");
+                    let else_return_type = self.visit_statement(&else_branch.else_branch);
+                    println!("Else Branch {:?}", else_return_type);
+                    if let (Some(trt), Some(ert)) =
+                        (then_return_type.as_ref(), else_return_type.as_ref())
+                    {
+                        println!("Branches {:?} {:?}", trt, ert);
+                        if *ert == DataType::Void {
+                            return then_return_type;
+                        }
+                        if *trt == DataType::Void {
+                            return else_return_type;
+                        }
+
+                        if *trt != *ert {
+                            println!("Branches of If statement have different return types");
+                            // TODO(letohg): [2026-01-15] emit diagnostic
+                        }
+                    }
+                }
+                return then_return_type;
             }
         }
     }
@@ -302,11 +333,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::CollectSymbols => {
                 self.diagnostics.borrow_mut().report_error(
                     format!("For loop statement not allowed outside of functions"),
-                    super::lexer::TextSpan {
-                        start: 0,
-                        end: 0,
-                        literal: "if".to_string(),
-                    },
+                    statement.keyword.span.clone(),
                 );
                 None
             }
@@ -319,9 +346,9 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 }));
                 self.visit_expression(&statement.range.0);
                 self.visit_expression(&statement.range.1);
-                self.visit_statement(&statement.body);
+                let return_type = self.visit_statement(&statement.body);
                 self.exit_scope();
-                Some(DataType::Void)
+                return_type
             }
         }
     }
@@ -334,18 +361,13 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::CollectSymbols => {
                 self.diagnostics.borrow_mut().report_error(
                     format!("While statement not allowed outside of functions"),
-                    super::lexer::TextSpan {
-                        start: 0,
-                        end: 0,
-                        literal: "if".to_string(),
-                    },
+                    statement.keyword.span.clone(),
                 );
                 None
             }
             Pass::TypeCheck => {
                 self.visit_expression(&statement.condition);
-                self.visit_statement(&statement.body);
-                Some(DataType::Void)
+                self.visit_statement(&statement.body)
             }
         }
     }
@@ -383,10 +405,10 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     name: function.identifier.name(),
                     return_type: function.return_type.name(),
                 });
-                self.visit_statement(&function.body);
+                let return_type = self.visit_statement(&function.body);
                 self.function_stack.pop();
                 self.exit_scope();
-                Some(DataType::Void)
+                return_type
             }
         }
     }
@@ -439,6 +461,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
         match self.pass {
             Pass::CollectSymbols => None,
             Pass::TypeCheck => {
+                let mut func_return_type = DataType::Void;
                 if expr.identifier() == "println" {
                 } else if self.lookup(&expr.identifier().to_string()).is_none() {
                     self.diagnostics
@@ -448,7 +471,10 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 } else {
                     let expected_number_of_arguments = match self.lookup(expr.identifier()).unwrap()
                     {
-                        Symbol::Function(func) => func.parameters.len(),
+                        Symbol::Function(func) => {
+                            func_return_type = DataType::from_string(&func.return_type);
+                            func.parameters.len()
+                        }
                         _ => {
                             println!("Not a callable!");
                             return None;
@@ -469,7 +495,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 for arg in expr.arguments.iter() {
                     self.visit_expression(arg);
                 }
-                Some(DataType::Void)
+                Some(func_return_type)
             }
         }
     }
@@ -524,6 +550,9 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::TypeCheck => {
                 let left_type = self.visit_expression(&expr.left)?;
                 let right_type = self.visit_expression(&expr.right)?;
+                if left_type == right_type {
+                    return Some(right_type);
+                }
                 Some(DataType::Void)
             }
         }
@@ -535,10 +564,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
     ) -> Option<DataType> {
         match self.pass {
             Pass::CollectSymbols => None,
-            Pass::TypeCheck => {
-                self.visit_expression(&expr.expr);
-                Some(DataType::Void)
-            }
+            Pass::TypeCheck => self.visit_expression(&expr.expr),
         }
     }
 

@@ -372,7 +372,7 @@ impl ASTHiglightPrinter {
             self.result
                 .lines()
                 .enumerate()
-                .map(|(i, line)| format!("{:3} │ {}", i, line))
+                .map(|(i, line)| format!("{:3} │ {}", i + 1, line))
                 .collect::<Vec<String>>()
                 .join("\n"),
             Fg(White)
@@ -554,7 +554,11 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
             ));
         }
 
-        self.print(&format!("{}) ", Fg(Self::TEXT_COLOR)));
+        self.print(&format!(
+            "{}) -> {} ",
+            Fg(Self::TEXT_COLOR),
+            function.return_type.name()
+        ));
         if let super::ASTStatementKind::Compound(statement) = &function.body.kind {
             self.visit_compound_statement(statement);
         }
@@ -659,6 +663,6 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), integer));
     }
     fn visit_float(&mut self, float: &f64) {
-        self.print(&format!("{}{}", Fg(Self::FLOAT_COLOR), float));
+        self.print(&format!("{}{}f", Fg(Self::FLOAT_COLOR), float));
     }
 }

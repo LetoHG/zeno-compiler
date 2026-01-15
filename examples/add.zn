@@ -1,8 +1,8 @@
-func add(a: i32, b: i32) -> i32 {
+func add(a: i32, b: f32) -> i32 {
     return a + b;
 }
 
 func main() -> i32 {
-    let result: i32 = add(2, 3);
+    let result: i32 = add(2, 3.0);
     return result;
 }
