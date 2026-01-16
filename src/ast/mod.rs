@@ -57,6 +57,7 @@ pub trait ASTVisitor<T> {
     fn do_visit_expression(&mut self, expr: &ASTExpression) -> T {
         match &expr.kind {
             ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(i),
+            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone()),
             ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
             ASTExpressionKind::Variable(expr) => self.visit_variable_expression(expr),
             ASTExpressionKind::StringLiteral(_) => todo!(),
@@ -112,6 +113,7 @@ pub trait ASTVisitor<T> {
 
     fn visit_error(&mut self, span: &TextSpan) -> T;
     fn visit_integer(&mut self, integer: &i64) -> T;
+    fn visit_boolean(&mut self, boolean: bool) -> T;
     fn visit_float(&mut self, float: &f64) -> T;
 }
 
@@ -309,6 +311,7 @@ impl ASTStatement {
 #[derive(Clone, PartialEq)]
 enum ASTExpressionKind {
     IntegerLiteral(i64),
+    BooleanLiteral(bool),
     FloatingLiteral(f64),
     StringLiteral(String),
     Unary(ASTUnaryExpression),
@@ -343,6 +346,12 @@ impl ASTExpression {
     fn float(f: f64) -> Self {
         Self {
             kind: ASTExpressionKind::FloatingLiteral(f),
+        }
+    }
+
+    fn boolean(b: bool) -> Self {
+        Self {
+            kind: ASTExpressionKind::BooleanLiteral(b),
         }
     }
 
@@ -687,6 +696,10 @@ mod test {
 
         fn visit_integer(&mut self, integer: &i64) {
             self.actual.push(TestASTNode::Integer(integer.clone()));
+        }
+
+        fn visit_boolean(&mut self, boolean: bool) {
+            // self.actual.push(TestASTNode::Boolean(integer.clone()));
         }
 
         fn visit_float(&mut self, float: &f64) {

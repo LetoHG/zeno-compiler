@@ -785,6 +785,13 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::TypeCheck => Some(DataType::Int),
         }
     }
+
+    fn visit_boolean(&mut self, boolean: bool) -> Option<DataType> {
+        match self.pass {
+            Pass::CollectSymbols => None,
+            Pass::TypeCheck => Some(DataType::Bool),
+        }
+    }
     fn visit_float(&mut self, float: &f64) -> Option<DataType> {
         match self.pass {
             Pass::CollectSymbols => None,

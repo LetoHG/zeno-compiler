@@ -341,6 +341,9 @@ impl ASTVisitor<()> for TypeChecker {
     fn visit_integer(&mut self, integer: &i64) {
         todo!()
     }
+    fn visit_boolean(&mut self, boolean: bool) {
+        todo!()
+    }
 
     fn visit_float(&mut self, float: &f64) {
         todo!()

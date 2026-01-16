@@ -130,7 +130,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         self.visit_expression(&statement.range.0);
         let range_start = self.result.unwrap() as i64;
         self.visit_expression(&statement.range.1);
-        let range_end = self.result.unwrap() as i64;
+        let range_end = self.result.unwrap() as i64 + 1;
         let loop_var = statement.loop_variable.span.literal.clone();
 
         self.enter_scope(Scope::new());
@@ -193,7 +193,15 @@ impl ASTVisitor<Option<()>> for ASTSolver {
     ) -> Option<()> {
         // TODO(letohg): [2025-07-19] support for builtin functions
         if expr.identifier() == "println" {
-            println!("Println call with stuff...");
+            for arg_expr in expr.arguments.iter() {
+                self.visit_expression(&arg_expr);
+                // let arg_name = func_arg.identifier.span.literal.clone();
+
+                println!("println: {}", self.result.unwrap());
+            }
+            if expr.arguments.len() == 0 {
+                println!("");
+            }
             return None;
         }
 
@@ -287,6 +295,10 @@ impl ASTVisitor<Option<()>> for ASTSolver {
 
     fn visit_integer(&mut self, integer: &i64) -> Option<()> {
         self.result = Some(integer.clone() as f64);
+        None
+    }
+    fn visit_boolean(&mut self, boolean: bool) -> Option<()> {
+        self.result = Some(boolean as i64 as f64);
         None
     }
     fn visit_float(&mut self, float: &f64) -> Option<()> {

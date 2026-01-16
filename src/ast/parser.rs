@@ -244,7 +244,7 @@ impl Parser {
             return None;
         }
         let else_keyword = self.consume_expected(TokenKind::Else).clone();
-        let else_branch = self.parse_compound_statement();
+        let else_branch = self.parse_statement();
         Some(ASTElseStatement {
             else_keyword: else_keyword,
             else_branch: Box::new(else_branch),
@@ -314,7 +314,7 @@ impl Parser {
             if self.peek(1).kind == TokenKind::PlusEqual
                 || self.peek(1).kind == TokenKind::MinusEqual
                 || self.peek(1).kind == TokenKind::AstriskEqual
-                || self.peek(1).kind == TokenKind::Slash
+                || self.peek(1).kind == TokenKind::SlashEqual
             {
                 let var = self.consume().clone();
                 let op = self.consume_assignment_operator();
@@ -372,7 +372,7 @@ impl Parser {
     }
 
     fn parse_primary_expression(&mut self) -> ASTExpression {
-        let token = self.consume().clone();
+        let token: Token = self.consume().clone();
 
         return match token.kind {
             TokenKind::Integer(i) => ASTExpression::integer(i),
@@ -380,6 +380,10 @@ impl Parser {
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
+                } else if token.name() == "false" {
+                    ASTExpression::boolean(false)
+                } else if token.name() == "true" {
+                    ASTExpression::boolean(true)
                 } else {
                     ASTExpression::identifier(token.clone())
                 }
