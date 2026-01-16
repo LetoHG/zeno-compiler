@@ -150,6 +150,8 @@ pub struct ASTReturnStatement {
 #[derive(Clone)]
 pub struct ASTCompoundStatement {
     statements: Vec<ASTStatement>,
+    start_brace: Token,
+    end_brace: Token,
 }
 
 #[derive(Clone)]
@@ -235,9 +237,13 @@ impl ASTStatement {
         }
     }
 
-    fn compound(statements: Vec<ASTStatement>) -> Self {
+    fn compound(statements: Vec<ASTStatement>, start_brace: Token, end_brace: Token) -> Self {
         Self {
-            kind: ASTStatementKind::Compound(ASTCompoundStatement { statements }),
+            kind: ASTStatementKind::Compound(ASTCompoundStatement {
+                statements,
+                start_brace,
+                end_brace,
+            }),
         }
     }
 

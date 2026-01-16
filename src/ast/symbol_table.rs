@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::diagnostics::DiagnosticsColletionCell;
+use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsColletionCell};
 
 use super::{ASTReturnStatement, ASTStatementKind, ASTVisitor};
 
@@ -129,6 +129,15 @@ impl DataType {
             _ => Self::UserDefined(type_name.clone()),
         }
     }
+    fn to_string(&self) -> String {
+        match self {
+            Self::Void => "void".to_string(),
+            Self::Int => "i32".to_string(),
+            Self::Float => "f32".to_string(),
+            Self::Bool => "bool".to_string(),
+            Self::UserDefined(name) => name.clone(),
+        }
+    }
 }
 
 impl ASTVisitor<Option<DataType>> for SymbolTable {
@@ -140,10 +149,11 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::CollectSymbols => {
                 self.diagnostics.borrow_mut().report_error(
                     format!("Return statement not allowed outside of functions"),
+                    // TODO(letohg): [2026-01-16] diagnostic print does not work without the +1
                     super::lexer::TextSpan {
-                        start: 0,
-                        end: 0,
-                        literal: "if".to_string(),
+                        start: statement.keyword.span.start + 1,
+                        end: statement.keyword.span.end,
+                        literal: "return".to_string(),
                     },
                 );
                 None
@@ -164,7 +174,6 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                             literal: "return".to_string(),
                         },
                     );
-                    return None;
                 }
                 Some(actual)
             }
@@ -198,7 +207,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     );
                 }
 
-                Some(actual)
+                None
             }
         }
     }
@@ -230,7 +239,7 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     );
                 }
 
-                Some(actual)
+                None
             }
         }
     }
@@ -244,9 +253,9 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 self.diagnostics.borrow_mut().report_error(
                     format!("standalone Compound statement not allowed outside of functions"),
                     super::lexer::TextSpan {
-                        start: 0,
+                        start: statement.start_brace.span.start,
                         end: 0,
-                        literal: "if".to_string(),
+                        literal: "{".to_string(),
                     },
                 );
                 None
@@ -298,32 +307,40 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             }
             Pass::TypeCheck => {
                 let condition_type = self.visit_expression(&statement.condition)?;
+                match condition_type {
+                    DataType::Bool => {}
+                    _ => {
+                        self.diagnostics.borrow_mut().report_error(
+                            format!("Condition must be of type Bool"),
+                            statement.keyword.span.clone(),
+                        );
+                    }
+                };
 
                 let then_return_type = self.visit_statement(&statement.then_branch);
 
-                println!("Then Branch {:?}", then_return_type);
                 if let Some(else_branch) = &statement.else_branch {
-                    println!("Branches");
                     let else_return_type = self.visit_statement(&else_branch.else_branch);
-                    println!("Else Branch {:?}", else_return_type);
                     if let (Some(trt), Some(ert)) =
                         (then_return_type.as_ref(), else_return_type.as_ref())
                     {
-                        println!("Branches {:?} {:?}", trt, ert);
-                        if *ert == DataType::Void {
-                            return then_return_type;
-                        }
-                        if *trt == DataType::Void {
-                            return else_return_type;
-                        }
+                        // if *ert == DataType::Void {
+                        //     return then_return_type;
+                        // }
+                        // if *trt == DataType::Void {
+                        //     return else_return_type;
+                        // }
 
                         if *trt != *ert {
-                            println!("Branches of If statement have different return types");
-                            // TODO(letohg): [2026-01-15] emit diagnostic
+                            self.diagnostics.borrow_mut().report_error(
+                                format!("Branches of If statement have different return types"),
+                                statement.keyword.span.clone(),
+                            );
                         }
                     }
                 }
-                return then_return_type;
+                // return then_return_type;
+                None
             }
         }
     }
@@ -339,16 +356,26 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             }
             Pass::TypeCheck => {
                 self.enter_scope();
+                let range_start_type = self.visit_expression(&statement.range.0)?;
+                let range_end_type = self.visit_expression(&statement.range.1)?;
+
+                if range_start_type != range_end_type {
+                    self.diagnostics.borrow_mut().report_error(
+                        format!("Range start and end condition have to have same type"),
+                        statement.keyword.span.clone(),
+                    );
+                    return None;
+                }
+
                 self.declare_local_identifier(Symbol::Variable(VariableInfo {
                     name: statement.loop_variable.name(),
-                    data_type: "Unkown".to_string(), // TODO(letohg): [2025-07-19] evaluate the
-                                                     // datatype of statement.range (it has to be an integer)
+                    data_type: range_start_type.to_string(), // TODO(letohg): [2025-07-19] evaluate the
+                                                             // datatype of statement.range (it has to be an integer)
                 }));
-                self.visit_expression(&statement.range.0);
-                self.visit_expression(&statement.range.1);
                 let return_type = self.visit_statement(&statement.body);
                 self.exit_scope();
-                return_type
+                // return_type
+                None
             }
         }
     }
@@ -366,8 +393,19 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 None
             }
             Pass::TypeCheck => {
-                self.visit_expression(&statement.condition);
-                self.visit_statement(&statement.body)
+                let condition_type = self.visit_expression(&statement.condition)?;
+                match condition_type {
+                    DataType::Bool => {}
+                    _ => {
+                        self.diagnostics.borrow_mut().report_error(
+                            format!("Condition must be of type Bool"),
+                            statement.keyword.span.clone(),
+                        );
+                    }
+                };
+
+                self.visit_statement(&statement.body);
+                None
             }
         }
     }
@@ -405,10 +443,10 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     name: function.identifier.name(),
                     return_type: function.return_type.name(),
                 });
-                let return_type = self.visit_statement(&function.body);
+                self.visit_statement(&function.body);
                 self.function_stack.pop();
                 self.exit_scope();
-                return_type
+                None
             }
         }
     }
@@ -435,13 +473,16 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                             if expr_data_type != expr_data_type {
                                 self.diagnostics.borrow_mut().report_error(
                                     format!(
-                                        "Callables are not assignable {}",
-                                        expr.identifier.name()
+                                        "Cannot assign {:?} to identifier '{}' of type {:?}",
+                                        expr_data_type,
+                                        expr.identifier.name(),
+                                        expected,
                                     ),
                                     expr.identifier.span.clone(),
                                 );
                             }
-                            return Some(expected);
+                            // return Some(expected);
+                            return None;
                         }
                     };
                 } else {
@@ -529,7 +570,8 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     }
                 };
 
-                Some(DataType::Void)
+                None
+                // Some(DataType::Void)
             }
         }
     }
@@ -538,8 +580,47 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
         match self.pass {
             Pass::CollectSymbols => None,
             Pass::TypeCheck => {
-                self.visit_expression(&expr.expr);
-                Some(DataType::Void)
+                let expr_data_type = self.visit_expression(&expr.expr)?;
+
+                match expr.operator.kind {
+                    super::ASTUnaryOperatorKind::Minus => {
+                        if expr_data_type != DataType::Int && expr_data_type != DataType::Float {
+                            self.diagnostics.borrow_mut().report_error(
+                                format!(
+                                    "Unary operator '-' can not be used on type {:?}",
+                                    expr_data_type
+                                ),
+                                expr.operator.token.span.clone(),
+                            );
+                            return None;
+                        }
+                    }
+                    super::ASTUnaryOperatorKind::BitwiseNOT => {
+                        if expr_data_type != DataType::Int {
+                            self.diagnostics.borrow_mut().report_error(
+                                format!(
+                                    "Unary operator '^' can not be used on type {:?}",
+                                    expr_data_type
+                                ),
+                                expr.operator.token.span.clone(),
+                            );
+                            return None;
+                        }
+                    }
+                    super::ASTUnaryOperatorKind::LogicNot => {
+                        if expr_data_type != DataType::Bool {
+                            self.diagnostics.borrow_mut().report_error(
+                                format!(
+                                    "Unary operator '!' can not be used on type {:?}",
+                                    expr_data_type
+                                ),
+                                expr.operator.token.span.clone(),
+                            );
+                            return None;
+                        }
+                    }
+                };
+                return Some(expr_data_type);
             }
         }
     }
@@ -550,10 +631,45 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::TypeCheck => {
                 let left_type = self.visit_expression(&expr.left)?;
                 let right_type = self.visit_expression(&expr.right)?;
-                if left_type == right_type {
-                    return Some(right_type);
+                if left_type != right_type {
+                    self.diagnostics.borrow_mut().report_error(
+                        format!(
+                            "Both sides of an expression have to have same type {:?} {:?} ",
+                            left_type, right_type
+                        ),
+                        expr.operator.token.span.clone(),
+                    );
+
+                    return None;
                 }
-                Some(DataType::Void)
+                match expr.operator.kind {
+                    ASTBinaryOperatorKind::Plus
+                    | ASTBinaryOperatorKind::Minus
+                    | ASTBinaryOperatorKind::Multiply
+                    | ASTBinaryOperatorKind::Divide => return Some(right_type),
+                    ASTBinaryOperatorKind::EqualTo
+                    | ASTBinaryOperatorKind::NotEqualTo
+                    | ASTBinaryOperatorKind::GreaterThan
+                    | ASTBinaryOperatorKind::GreaterThanOrEqual
+                    | ASTBinaryOperatorKind::LessThan
+                    | ASTBinaryOperatorKind::LessThanOrEqual => return Some(DataType::Bool),
+                    ASTBinaryOperatorKind::LogicAND | ASTBinaryOperatorKind::LogicOR => {
+                        if left_type == DataType::Bool {
+                            return Some(DataType::Bool);
+                        }
+                        return None;
+                    }
+                    ASTBinaryOperatorKind::BitwiseOR
+                    | ASTBinaryOperatorKind::BitwiseAND
+                    | ASTBinaryOperatorKind::BitwiseXOR => {
+                        if left_type == DataType::Int {
+                            return Some(DataType::Int);
+                        }
+                        return None;
+                    }
+                    _ => {}
+                };
+                return Some(right_type);
             }
         }
     }

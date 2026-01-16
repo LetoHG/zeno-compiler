@@ -159,7 +159,7 @@ impl Parser {
     }
 
     fn parse_compound_statement(&mut self) -> ASTStatement {
-        self.consume_expected(TokenKind::LeftBrace);
+        let start_brace = self.consume_expected(TokenKind::LeftBrace).clone();
         let mut statements: Vec<ASTStatement> = Vec::new();
         while self.current_token().kind != TokenKind::RightBrace
             && self.current_token().kind != TokenKind::Eof
@@ -167,8 +167,8 @@ impl Parser {
             println!("Help {:?}", self.current_token());
             statements.push(self.parse_statement());
         }
-        self.consume_expected(TokenKind::RightBrace);
-        ASTStatement::compound(statements)
+        let end_brace = self.consume_expected(TokenKind::RightBrace).clone();
+        ASTStatement::compound(statements, start_brace, end_brace)
     }
 
     fn parse_function_statement(&mut self) -> ASTStatement {
