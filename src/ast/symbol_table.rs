@@ -106,7 +106,7 @@ impl SymbolTable {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum DataType {
     Void,
     Int,
@@ -136,6 +136,44 @@ impl DataType {
             Self::Float => "f32".to_string(),
             Self::Bool => "bool".to_string(),
             Self::UserDefined(name) => name.clone(),
+        }
+    }
+    fn get_common_type(type1: &Self, type2: &Self) -> Option<Self> {
+        match (type1, type2) {
+            (Self::Int, Self::Bool) => Some(Self::Int),
+            (Self::Bool, Self::Int) => Some(Self::Int),
+            (Self::Bool, Self::Float) => Some(Self::Float),
+            (Self::Float, Self::Bool) => Some(Self::Float),
+            (Self::Int, Self::Float) => Some(Self::Float),
+            (Self::Float, Self::Int) => Some(Self::Float),
+            (Self::Float, Self::UserDefined(_)) => None,
+            (Self::Int, Self::UserDefined(_)) => None,
+            (Self::Bool, Self::UserDefined(_)) => None,
+            (Self::UserDefined(_), Self::Int) => None,
+            (Self::UserDefined(_), Self::Float) => None,
+            (Self::UserDefined(_), Self::Bool) => None,
+            (Self::UserDefined(_), Self::UserDefined(_)) => None,
+            (Self::Int, Self::Int) => Some(Self::Int),
+            (Self::Float, Self::Float) => Some(Self::Float),
+            (Self::Bool, Self::Bool) => Some(Self::Bool),
+            (Self::Void, Self::Void) => Some(Self::Void),
+            _ => todo!(),
+        }
+    }
+
+    fn is_convertable_to(&self, wanted_type: Self) -> bool {
+        if *self == wanted_type {
+            return true;
+        }
+        match (self, wanted_type) {
+            (Self::Int, Self::Int) => true,
+            (Self::Int, Self::Float) => true,
+            (Self::Int, Self::Bool) => true,
+            (Self::Float, Self::Int) => true,
+            (Self::Float, Self::Bool) => true,
+            (Self::Bool, Self::Int) => true,
+            (Self::Bool, Self::Float) => true,
+            _ => false,
         }
     }
 }
@@ -194,11 +232,19 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     name: statement.identifier.name(),
                     data_type: statement.data_type.name(),
                 }));
-                let initialization_expr_type = self.visit_expression(&statement.initializer)?;
+                let initialization_expr_type: DataType =
+                    self.visit_expression(&statement.initializer)?;
                 let actual = DataType::from_token(&statement.data_type);
-                // TODO(letohg): [2025-07-19] Implement implicit conversion check
-                if initialization_expr_type != actual {
-                    self.diagnostics.borrow_mut().report_warning(
+                if initialization_expr_type.is_convertable_to(actual.clone()) {
+                    // self.diagnostics.borrow_mut().report_warning(
+                    //     format!(
+                    //         "Implicit conversion from {:?} to {:?}",
+                    //         initialization_expr_type, actual,
+                    //     ),
+                    //     statement.identifier.span.clone(),
+                    // );
+                } else {
+                    self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Initializing an {:?} from a {:?}",
                             actual, initialization_expr_type
@@ -228,9 +274,16 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 }));
                 let initialization_expr_type = self.visit_expression(&statement.initializer)?;
                 let actual = DataType::from_token(&statement.data_type);
-                // TODO(letohg): [2025-07-19] Implement implicit conversion check
-                if initialization_expr_type != actual {
-                    self.diagnostics.borrow_mut().report_warning(
+                if initialization_expr_type.is_convertable_to(actual.clone()) {
+                    // self.diagnostics.borrow_mut().report_warning(
+                    //     format!(
+                    //         "Implicit conversion from {:?} to {:?}",
+                    //         initialization_expr_type, actual,
+                    //     ),
+                    //     statement.identifier.span.clone(),
+                    // );
+                } else {
+                    self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Initializing an {:?} from a {:?}",
                             actual, initialization_expr_type
@@ -470,7 +523,16 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                         }
                         Symbol::Variable(v) | Symbol::Constant(v) => {
                             let expected = DataType::from_string(&v.data_type);
-                            if expr_data_type != expr_data_type {
+
+                            if expr_data_type.is_convertable_to(expected.clone()) {
+                                // self.diagnostics.borrow_mut().report_warning(
+                                //     format!(
+                                //         "Implicit conversion from {:?} to {:?}",
+                                //         expr_data_type, expected,
+                                //     ),
+                                //     expr.identifier.span.clone(),
+                                // );
+                            } else {
                                 self.diagnostics.borrow_mut().report_error(
                                     format!(
                                         "Cannot assign {:?} to identifier '{}' of type {:?}",
@@ -631,22 +693,23 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::TypeCheck => {
                 let left_type = self.visit_expression(&expr.left)?;
                 let right_type = self.visit_expression(&expr.right)?;
-                if left_type != right_type {
+
+                let common_data_type = DataType::get_common_type(&left_type, &right_type);
+                if common_data_type.is_none() {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
-                            "Both sides of an expression have to have same type {:?} {:?} ",
+                            "No common datatype between {:?} and {:?}",
                             left_type, right_type
                         ),
                         expr.operator.token.span.clone(),
                     );
-
-                    return None;
                 }
+
                 match expr.operator.kind {
                     ASTBinaryOperatorKind::Plus
                     | ASTBinaryOperatorKind::Minus
                     | ASTBinaryOperatorKind::Multiply
-                    | ASTBinaryOperatorKind::Divide => return Some(right_type),
+                    | ASTBinaryOperatorKind::Divide => return common_data_type,
                     ASTBinaryOperatorKind::EqualTo
                     | ASTBinaryOperatorKind::NotEqualTo
                     | ASTBinaryOperatorKind::GreaterThan
@@ -654,17 +717,37 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     | ASTBinaryOperatorKind::LessThan
                     | ASTBinaryOperatorKind::LessThanOrEqual => return Some(DataType::Bool),
                     ASTBinaryOperatorKind::LogicAND | ASTBinaryOperatorKind::LogicOR => {
-                        if left_type == DataType::Bool {
+                        if left_type.is_convertable_to(DataType::Bool)
+                            && right_type.is_convertable_to(DataType::Bool)
+                        {
                             return Some(DataType::Bool);
                         }
+
+                        self.diagnostics.borrow_mut().report_error(
+                            format!(
+                                "Both sides need to be convertable it to bool: {:?} and {:?} ",
+                                left_type, right_type
+                            ),
+                            expr.operator.token.span.clone(),
+                        );
+
                         return None;
                     }
                     ASTBinaryOperatorKind::BitwiseOR
                     | ASTBinaryOperatorKind::BitwiseAND
                     | ASTBinaryOperatorKind::BitwiseXOR => {
-                        if left_type == DataType::Int {
-                            return Some(DataType::Int);
-                        }
+                        match common_data_type {
+                            Some(DataType::Int) => return Some(DataType::Int),
+                            _ => {}
+                        };
+                        self.diagnostics.borrow_mut().report_error(
+                            format!(
+                                "Both sides need to be of type int: {:?} and {:?} ",
+                                left_type, right_type
+                            ),
+                            expr.operator.token.span.clone(),
+                        );
+
                         return None;
                     }
                     _ => {}

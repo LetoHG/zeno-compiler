@@ -26,6 +26,8 @@ impl Diagnostic {
 
 pub struct DiagnosticsColletion {
     pub diagnostics: Vec<Diagnostic>,
+    pub count_errors: usize,
+    pub count_warnings: usize,
 }
 
 pub type DiagnosticsColletionCell = Rc<RefCell<DiagnosticsColletion>>;
@@ -34,19 +36,25 @@ impl DiagnosticsColletion {
     pub fn new() -> Self {
         Self {
             diagnostics: vec![],
+            count_errors: 0,
+            count_warnings: 0,
         }
     }
 
     pub fn clear(&mut self) {
         self.diagnostics.clear();
+        self.count_errors = 0;
+        self.count_warnings = 0;
     }
 
     pub fn report_error(&mut self, message: String, span: TextSpan) {
+        self.count_errors += 1;
         self.diagnostics
             .push(Diagnostic::new(message, DiagnosticKind::Error, span));
     }
 
     pub fn report_warning(&mut self, message: String, span: TextSpan) {
+        self.count_warnings += 1;
         self.diagnostics
             .push(Diagnostic::new(message, DiagnosticKind::Warning, span));
     }
