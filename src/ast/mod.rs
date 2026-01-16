@@ -525,6 +525,7 @@ mod test {
     enum TestASTNode {
         Floating(f64),
         Integer(i64),
+        Boolean(bool),
         Variable(String),
         Let(String, TokenKind),
         Var(String, TokenKind),
@@ -568,7 +569,7 @@ mod test {
             assert_eq!(
                 self.expected.len(),
                 self.actual.len(),
-                "Expected {} nodes only has {} ",
+                "Expected {} nodes but has {} ",
                 self.expected.len(),
                 self.actual.len()
             );
@@ -583,7 +584,7 @@ mod test {
         }
     }
 
-    impl ASTVisitor for ASTVerifier {
+    impl ASTVisitor<()> for ASTVerifier {
         fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
             self.actual.push(TestASTNode::Return);
             self.visit_expression(&statement.expr);
@@ -611,7 +612,7 @@ mod test {
             if let super::ASTStatementKind::Compound(body) = &statement.then_branch.kind {
                 self.visit_compound_statement(body);
             }
-            if let Some(else_branch) = statement.else_branch {
+            if let Some(else_branch) = &statement.else_branch {
                 self.visit_statement(&else_branch.else_branch);
             }
         }
@@ -699,11 +700,21 @@ mod test {
         }
 
         fn visit_boolean(&mut self, boolean: bool) {
-            // self.actual.push(TestASTNode::Boolean(integer.clone()));
+            self.actual.push(TestASTNode::Boolean(boolean));
         }
 
         fn visit_float(&mut self, float: &f64) {
             self.actual.push(TestASTNode::Floating(float.clone()));
+        }
+
+        fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) -> () {
+            for stmnt in &statement.statements {
+                self.visit_statement(&stmnt);
+            }
+        }
+
+        fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {
+            todo!()
         }
     }
 
@@ -721,10 +732,14 @@ mod test {
 
     #[test]
     fn should_parse_return_statement() {
-        let input = "let a: i32 = 7;
-                           return a + 10;
-                           ";
+        let input = "\
+        func main() -> i32 {
+            let a: i32 = 7;
+            return a + 10;
+        }
+        ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::I32)]),
             TestASTNode::Let("a".to_string(), TokenKind::I32),
             TestASTNode::Integer(7),
             TestASTNode::Return,
@@ -825,12 +840,15 @@ mod test {
     #[test]
     fn should_parse_for_loop() {
         let input = "\
-        var a: u32 = 0;
-        for i in 0..10 {
-            a += i;
+        func main() {
+            var a: u32 = 0;
+            for i in 0..10 {
+                a += i;
+            }
         }
         ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::Void)]),
             TestASTNode::Var("a".to_string(), TokenKind::U32),
             TestASTNode::Integer(0),
             TestASTNode::For("i".to_string()),
@@ -849,12 +867,15 @@ mod test {
     #[test]
     fn should_parse_while_loop() {
         let input = "\
-        var a: i32 = 5;
-        while a > 0 {
-            a -= 1;
+        func main() {
+            var a: i32 = 5;
+            while a > 0 {
+                a -= 1;
+            }
         }
         ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::Void)]),
             TestASTNode::Var("a".to_string(), TokenKind::I32),
             TestASTNode::Integer(5),
             TestASTNode::While,

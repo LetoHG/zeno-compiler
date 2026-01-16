@@ -96,6 +96,10 @@ impl SymbolTable {
         scope.insert(symbol.name(), symbol);
     }
 
+    fn is_global_scope(&self) -> bool {
+        return self.scopes.len() == 0;
+    }
+
     fn lookup(&self, name: &str) -> Option<&Symbol> {
         for scope in self.scopes.iter().rev() {
             if let Some(symbol) = scope.get(name) {
@@ -123,8 +127,16 @@ impl DataType {
     fn from_string(type_name: &String) -> Self {
         match type_name.as_str() {
             "void" => Self::Void,
+            "i8" => Self::Int,
+            "i16" => Self::Int,
             "i32" => Self::Int,
+            "i64" => Self::Int,
+            "u8" => Self::Int,
+            "u16" => Self::Int,
+            "u32" => Self::Int,
+            "u64" => Self::Int,
             "f32" => Self::Float,
+            "f64" => Self::Float,
             "bool" => Self::Bool,
             _ => Self::UserDefined(type_name.clone()),
         }
@@ -228,6 +240,10 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 None
             }
             Pass::TypeCheck => {
+                if self.is_global_scope() {
+                    return None;
+                }
+
                 self.declare_local_identifier(Symbol::Constant(VariableInfo {
                     name: statement.identifier.name(),
                     data_type: statement.data_type.name(),
@@ -268,6 +284,10 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 None
             }
             Pass::TypeCheck => {
+                if self.is_global_scope() {
+                    return None;
+                }
+
                 self.declare_local_identifier(Symbol::Variable(VariableInfo {
                     name: statement.identifier.name(),
                     data_type: statement.data_type.name(),

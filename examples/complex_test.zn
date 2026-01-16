@@ -36,6 +36,8 @@ func clamp(value: i32, min: i32, max: i32) -> i32 {
     return value;
 }
 
+let global_var : i32 = 42;
+
 func main() -> i32 {
     let start: i32 = 0;
     let end: i32 = 10;
