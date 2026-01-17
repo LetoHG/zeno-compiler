@@ -25,7 +25,7 @@ impl<'a> DiagnosticsPrinter<'a> {
     //             ^^^^^^^ Not found in this scope
     pub fn stringify_diagnostic(&self, diagnostic: &Diagnostic) -> String {
         let (line, col) = self.source_text.get_location(diagnostic.span.start);
-        let line_number = self.source_text.get_linenumber(diagnostic.span.start) - 1;
+        let line_number = self.source_text.get_linenumber(diagnostic.span.start);
         let symbol_len = diagnostic.span.literal.len();
         let symbol_end_col = col + diagnostic.span.literal.len();
         let prefix = line[..col].to_string();

@@ -96,6 +96,11 @@ impl SymbolTable {
         scope.insert(symbol.name(), symbol);
     }
 
+    fn is_identifier_in_current_scope(&self, name: &str) -> bool {
+        let scope = self.scopes.last().expect("No scope available");
+        scope.contains_key(name)
+    }
+
     fn is_global_scope(&self) -> bool {
         return self.scopes.len() == 0;
     }
@@ -243,6 +248,32 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                 if self.is_global_scope() {
                     return None;
                 }
+                if self.is_identifier_in_current_scope(&statement.identifier.name()) {
+                    self.diagnostics.borrow_mut().report_error(
+                        format!("Redefinition of identifier!"),
+                        statement.identifier.span.clone(),
+                    );
+                    return None;
+                }
+
+                let shadowed_identifier = self.lookup(&statement.identifier.name());
+                match shadowed_identifier {
+                    Some(Symbol::Function(_)) => {
+                        self.diagnostics.borrow_mut().report_error(
+                            format!("Identifier already used for function name"),
+                            statement.identifier.span.clone(),
+                        );
+                        return None;
+                    }
+                    Some(Symbol::Variable(_)) | Some(Symbol::Constant(_)) => {
+                        self.diagnostics.borrow_mut().report_warning(
+                            format!("Declaration shadows identifier in outer scope"),
+                            statement.identifier.span.clone(),
+                        );
+                        return None;
+                    }
+                    _ => {}
+                };
 
                 self.declare_local_identifier(Symbol::Constant(VariableInfo {
                     name: statement.identifier.name(),
@@ -286,6 +317,14 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::TypeCheck => {
                 if self.is_global_scope() {
                     return None;
+                }
+
+                let redefinition = self.lookup(statement.identifier.name().as_str());
+                if !redefinition.is_none() {
+                    self.diagnostics.borrow_mut().report_error(
+                        format!("Identifier {} already defined", statement.identifier.name()),
+                        statement.identifier.span.clone(),
+                    );
                 }
 
                 self.declare_local_identifier(Symbol::Variable(VariableInfo {
@@ -536,12 +575,12 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                     match identifier {
                         Symbol::Function(_) => {
                             self.diagnostics.borrow_mut().report_error(
-                                format!("Callables are not assignable {}", expr.identifier.name()),
+                                format!("Callables are not assignable {}", identifier.name()),
                                 expr.identifier.span.clone(),
                             );
                             return None;
                         }
-                        Symbol::Variable(v) | Symbol::Constant(v) => {
+                        Symbol::Variable(v) => {
                             let expected = DataType::from_string(&v.data_type);
 
                             if expr_data_type.is_convertable_to(expected.clone()) {
@@ -557,13 +596,20 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
                                     format!(
                                         "Cannot assign {:?} to identifier '{}' of type {:?}",
                                         expr_data_type,
-                                        expr.identifier.name(),
+                                        identifier.name(),
                                         expected,
                                     ),
                                     expr.identifier.span.clone(),
                                 );
                             }
                             // return Some(expected);
+                            return None;
+                        }
+                        Symbol::Constant(c) => {
+                            self.diagnostics.borrow_mut().report_error(
+                                format!("Cannot reassign constant"),
+                                expr.identifier.span.clone(),
+                            );
                             return None;
                         }
                     };
