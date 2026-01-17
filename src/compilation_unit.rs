@@ -1,3 +1,4 @@
+use crate::ast::symbol_table;
 use crate::{ast, diagnostics};
 use ast::lexer::Token;
 use ast::printer::ASTHiglightPrinter;
@@ -34,20 +35,29 @@ impl CompilationUnit {
         let mut highlight_printer = ASTHiglightPrinter::new();
         ast.visit(&mut highlight_printer);
         highlight_printer.print_result();
-
-        println!(
-            "Synatx Errors: {}",
-            diagnostics_colletion.borrow_mut().diagnostics.len()
-        );
+        {
+            let count_errors = diagnostics_colletion.borrow_mut().count_errors;
+            let count_warnings = diagnostics_colletion.borrow_mut().count_warnings;
+            println!(
+                "Syntax: {} Errors and {} Warnings",
+                count_errors, count_warnings
+            );
+        }
         Self::check_diagstics(&source_text, &diagnostics_colletion)?;
 
-        let mut symbol_checker =
-            symbol_checker::SymbolChecker::new(Rc::clone(&diagnostics_colletion));
-        ast.visit(&mut symbol_checker);
-        println!(
-            "Indentifier Errors: {}",
-            diagnostics_colletion.borrow_mut().diagnostics.len()
-        );
+        let mut symbol_table = symbol_table::SymbolTable::new(Rc::clone(&diagnostics_colletion));
+        symbol_table.build(&ast);
+        // let mut symbol_checker =
+        //     symbol_checker::SymbolChecker::new(Rc::clone(&diagnostics_colletion));
+        // ast.visit(&mut symbol_checker);
+        {
+            let count_errors = diagnostics_colletion.borrow_mut().count_errors;
+            let count_warnings = diagnostics_colletion.borrow_mut().count_warnings;
+            println!(
+                "Type Check: {} Errors and {} Warnings",
+                count_errors, count_warnings
+            );
+        }
         Self::check_diagstics(&source_text, &diagnostics_colletion)?;
 
         Ok(Self {
@@ -59,7 +69,8 @@ impl CompilationUnit {
     pub fn run(&self) {
         let mut solver = ASTSolver::new();
         self.ast.visit(&mut solver);
-        solver.print_result();
+        // solver.print_result();
+        solver.solve();
     }
 
     fn check_diagstics(

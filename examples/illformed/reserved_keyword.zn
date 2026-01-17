@@ -1,0 +1,3 @@
+func main() {
+    let i32 = 10; // Error: 'i32' is a reserved keyword/type
+}

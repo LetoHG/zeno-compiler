@@ -48,7 +48,7 @@ impl ASTTreePrinter {
     }
 }
 
-impl ASTVisitor for ASTTreePrinter {
+impl ASTVisitor<()> for ASTTreePrinter {
     fn visit_statement(&mut self, statement: &super::ASTStatement) {
         self.print(
             &format!("{}  Statement:", Self::STATEMENT_ICON),
@@ -57,6 +57,12 @@ impl ASTVisitor for ASTTreePrinter {
         self.increase_indentation();
         ASTVisitor::do_visit_statement(self, statement);
         self.decrease_indentation();
+    }
+
+    fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) -> () {
+        for statement in statement.statements.iter() {
+            self.visit_statement(statement);
+        }
     }
 
     fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
@@ -163,7 +169,7 @@ impl ASTVisitor for ASTTreePrinter {
         self.decrease_indentation();
     }
 
-    fn visit_funtion_statement(&mut self, function: &super::ASTFunctionStatement) {
+    fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
         self.print(
             &format!(
                 "{}  Function: {}{}",
@@ -326,6 +332,10 @@ impl ASTVisitor for ASTTreePrinter {
         self.print(&format!("Integer: {}", integer), &Self::TEXT_COLOR);
     }
 
+    fn visit_boolean(&mut self, boolean: bool) {
+        self.print(&format!("Integer: {}", boolean), &Self::TEXT_COLOR);
+    }
+
     fn visit_float(&mut self, float: &f64) {
         self.print(&format!("Float: {}", float), &Self::TEXT_COLOR);
     }
@@ -366,7 +376,7 @@ impl ASTHiglightPrinter {
             self.result
                 .lines()
                 .enumerate()
-                .map(|(i, line)| format!("{:3} │ {}", i, line))
+                .map(|(i, line)| format!("{:3} │ {}", i + 1, line))
                 .collect::<Vec<String>>()
                 .join("\n"),
             Fg(White)
@@ -417,7 +427,7 @@ impl ASTHiglightPrinter {
     }
 }
 
-impl ASTVisitor for ASTHiglightPrinter {
+impl ASTVisitor<()> for ASTHiglightPrinter {
     fn visit_statement(&mut self, statement: &super::ASTStatement) {
         self.do_visit_statement(statement);
     }
@@ -526,7 +536,7 @@ impl ASTVisitor for ASTHiglightPrinter {
         self.add_newline();
     }
 
-    fn visit_funtion_statement(&mut self, function: &super::ASTFunctionStatement) {
+    fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
         self.print_with_indent(&format!(
             "{}func {}{}{}(",
             Fg(Self::FUNC_COLOR),
@@ -548,7 +558,11 @@ impl ASTVisitor for ASTHiglightPrinter {
             ));
         }
 
-        self.print(&format!("{}) ", Fg(Self::TEXT_COLOR)));
+        self.print(&format!(
+            "{}) -> {} ",
+            Fg(Self::TEXT_COLOR),
+            function.return_type.name()
+        ));
         if let super::ASTStatementKind::Compound(statement) = &function.body.kind {
             self.visit_compound_statement(statement);
         }
@@ -568,6 +582,10 @@ impl ASTVisitor for ASTHiglightPrinter {
     }
 
     fn visit_function_call_expression(&mut self, expr: &super::ASTFunctionCallExpression) {
+        if expr.identifier() == "println" {
+            println!("Println call with stuff...");
+            return;
+        }
         self.print(&format!(
             "{}{}{}(",
             Fg(Self::FUNC_CALL_COLOR),
@@ -644,10 +662,15 @@ impl ASTVisitor for ASTHiglightPrinter {
         ));
     }
 
+    fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {}
     fn visit_integer(&mut self, integer: &i64) {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), integer));
     }
+    fn visit_boolean(&mut self, boolean: bool) {
+        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), boolean));
+    }
+
     fn visit_float(&mut self, float: &f64) {
-        self.print(&format!("{}{}", Fg(Self::FLOAT_COLOR), float));
+        self.print(&format!("{}{}f", Fg(Self::FLOAT_COLOR), float));
     }
 }

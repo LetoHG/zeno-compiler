@@ -3,10 +3,16 @@ func sum_until(upper : i32, threshold : i32) -> i32 {
     for i in 0..100 {
         sum += i;
         if sum > threshold {
-            return i;
+            return 2;
+        }
+        else {
+            return 1.0;
         }
     }
     return 0;
 }
 
-return sum_until(20, 27);
+
+func main() -> i32 {
+    return sum_until(20, 27);
+}

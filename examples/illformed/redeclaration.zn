@@ -1,0 +1,4 @@
+func main() {
+    let a: i32 = 10;
+    let a: i32 = 20; // Error: redeclaration of 'a' in same scope
+}

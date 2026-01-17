@@ -1,0 +1,4 @@
+func main() {
+    let result : i32 = multiply(4, 5); // Error: 'multiply' is undefined
+    println(result);
+}

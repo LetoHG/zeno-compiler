@@ -1,0 +1,8 @@
+func compute() -> i32 {
+    return 42;
+}
+
+func main() {
+    let compute : i32 = 5; // Error: 'compute' shadows function
+    println(compute);
+}

@@ -6,6 +6,8 @@ pub mod parser;
 pub mod printer;
 pub mod solver;
 pub mod symbol_checker;
+pub mod symbol_table;
+pub mod type_checker;
 
 pub struct Ast {
     statements: Vec<ASTStatement>,
@@ -22,7 +24,7 @@ impl Ast {
         self.statements.push(statement);
     }
 
-    pub fn visit(&self, printer: &mut dyn ASTVisitor) {
+    pub fn visit<T>(&self, printer: &mut dyn ASTVisitor<T>) {
         for statement in &self.statements {
             printer.visit_statement(statement);
         }
@@ -37,12 +39,12 @@ impl Ast {
     }
 }
 
-pub trait ASTVisitor {
-    fn do_visit_statement(&mut self, statement: &ASTStatement) {
+pub trait ASTVisitor<T> {
+    fn do_visit_statement(&mut self, statement: &ASTStatement) -> T {
         match &statement.kind {
             ASTStatementKind::Expr(expr) => self.visit_expression(expr),
             ASTStatementKind::Return(statement) => self.visit_return_statement(statement),
-            ASTStatementKind::FuncDecl(statement) => self.visit_funtion_statement(statement),
+            ASTStatementKind::FuncDecl(statement) => self.visit_function_statement(statement),
             ASTStatementKind::Let(statement) => self.visit_let_statement(statement),
             ASTStatementKind::Var(statement) => self.visit_var_statement(statement),
             ASTStatementKind::Compound(statement) => self.visit_compound_statement(statement),
@@ -52,9 +54,10 @@ pub trait ASTVisitor {
         }
     }
 
-    fn do_visit_expression(&mut self, expr: &ASTExpression) {
+    fn do_visit_expression(&mut self, expr: &ASTExpression) -> T {
         match &expr.kind {
             ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(i),
+            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone()),
             ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
             ASTExpressionKind::Variable(expr) => self.visit_variable_expression(expr),
             ASTExpressionKind::StringLiteral(_) => todo!(),
@@ -67,46 +70,51 @@ pub trait ASTVisitor {
         }
     }
 
-    fn visit_statement(&mut self, statement: &ASTStatement) {
-        self.do_visit_statement(statement);
+    fn visit_statement(&mut self, statement: &ASTStatement) -> T {
+        return self.do_visit_statement(statement);
     }
-    fn visit_compound_statement(&mut self, statement: &ASTCompoundStatement) {
-        for statement in statement.statements.iter() {
-            self.visit_statement(statement);
-        }
+    fn visit_compound_statement(&mut self, statement: &ASTCompoundStatement) -> T;
+    // {
+    //     for statement in statement.statements.iter() {
+    //         self.visit_statement(statement);
+    //     }
+    //     None
+    // }
+
+    fn visit_return_statement(&mut self, statement: &ASTReturnStatement) -> T;
+
+    fn visit_let_statement(&mut self, statement: &ASTLetStatement) -> T;
+    fn visit_var_statement(&mut self, statement: &ASTVarStatement) -> T;
+
+    fn visit_if_statement(&mut self, statement: &ASTIfStatement) -> T;
+    fn visit_for_loop_statement(&mut self, statement: &ASTForStatement) -> T;
+    fn visit_while_loop_statement(&mut self, statement: &ASTWhileStatement) -> T;
+
+    fn visit_function_statement(&mut self, function: &ASTFunctionStatement) -> T;
+    // {
+    //     if let ASTStatementKind::Compound(statement) = &function.body.kind {
+    //         self.visit_compound_statement(statement);
+    //     }
+    //     None
+    // }
+
+    fn visit_expression(&mut self, expr: &ASTExpression) -> T {
+        return self.do_visit_expression(expr);
     }
 
-    fn visit_return_statement(&mut self, statement: &ASTReturnStatement);
+    fn visit_assignment_expression(&mut self, expr: &ASTAssignmentExpression) -> T;
+    fn visit_function_call_expression(&mut self, expr: &ASTFunctionCallExpression) -> T;
+    fn visit_variable_expression(&mut self, expr: &ASTVariableExpression) -> T;
 
-    fn visit_let_statement(&mut self, statement: &ASTLetStatement);
-    fn visit_var_statement(&mut self, statement: &ASTVarStatement);
+    fn visit_unary_expression(&mut self, expr: &ASTUnaryExpression) -> T;
+    fn visit_binary_expression(&mut self, expr: &ASTBinaryExpression) -> T;
+    fn visit_parenthesised_expression(&mut self, expr: &ASTParenthesizedExpression) -> T;
+    fn visit_binary_operator(&mut self, op: &ASTBinaryOperator) -> T;
 
-    fn visit_if_statement(&mut self, statement: &ASTIfStatement);
-    fn visit_for_loop_statement(&mut self, statement: &ASTForStatement);
-    fn visit_while_loop_statement(&mut self, statement: &ASTWhileStatement);
-
-    fn visit_funtion_statement(&mut self, function: &ASTFunctionStatement) {
-        if let ASTStatementKind::Compound(statement) = &function.body.kind {
-            self.visit_compound_statement(statement);
-        }
-    }
-
-    fn visit_expression(&mut self, expr: &ASTExpression) {
-        self.do_visit_expression(expr);
-    }
-
-    fn visit_assignment_expression(&mut self, expr: &ASTAssignmentExpression);
-    fn visit_function_call_expression(&mut self, expr: &ASTFunctionCallExpression);
-    fn visit_variable_expression(&mut self, expr: &ASTVariableExpression);
-
-    fn visit_unary_expression(&mut self, expr: &ASTUnaryExpression);
-    fn visit_binary_expression(&mut self, expr: &ASTBinaryExpression);
-    fn visit_parenthesised_expression(&mut self, expr: &ASTParenthesizedExpression);
-    fn visit_binary_operator(&mut self, op: &ASTBinaryOperator);
-
-    fn visit_error(&mut self, span: &TextSpan) {}
-    fn visit_integer(&mut self, integer: &i64);
-    fn visit_float(&mut self, float: &f64);
+    fn visit_error(&mut self, span: &TextSpan) -> T;
+    fn visit_integer(&mut self, integer: &i64) -> T;
+    fn visit_boolean(&mut self, boolean: bool) -> T;
+    fn visit_float(&mut self, float: &f64) -> T;
 }
 
 #[derive(Clone)]
@@ -138,11 +146,14 @@ pub struct ASTVarStatement {
 
 #[derive(Clone)]
 pub struct ASTReturnStatement {
+    keyword: Token,
     expr: ASTExpression,
 }
 #[derive(Clone)]
 pub struct ASTCompoundStatement {
     statements: Vec<ASTStatement>,
+    start_brace: Token,
+    end_brace: Token,
 }
 
 #[derive(Clone)]
@@ -203,9 +214,9 @@ impl ASTStatement {
         }
     }
 
-    fn return_statement(expr: ASTExpression) -> Self {
+    fn return_statement(keyword: Token, expr: ASTExpression) -> Self {
         Self {
-            kind: ASTStatementKind::Return(ASTReturnStatement { expr }),
+            kind: ASTStatementKind::Return(ASTReturnStatement { keyword, expr }),
         }
     }
     fn let_statement(identifier: Token, data_type: Token, initializer: ASTExpression) -> Self {
@@ -228,9 +239,13 @@ impl ASTStatement {
         }
     }
 
-    fn compound(statements: Vec<ASTStatement>) -> Self {
+    fn compound(statements: Vec<ASTStatement>, start_brace: Token, end_brace: Token) -> Self {
         Self {
-            kind: ASTStatementKind::Compound(ASTCompoundStatement { statements }),
+            kind: ASTStatementKind::Compound(ASTCompoundStatement {
+                statements,
+                start_brace,
+                end_brace,
+            }),
         }
     }
 
@@ -296,6 +311,7 @@ impl ASTStatement {
 #[derive(Clone, PartialEq)]
 enum ASTExpressionKind {
     IntegerLiteral(i64),
+    BooleanLiteral(bool),
     FloatingLiteral(f64),
     StringLiteral(String),
     Unary(ASTUnaryExpression),
@@ -330,6 +346,12 @@ impl ASTExpression {
     fn float(f: f64) -> Self {
         Self {
             kind: ASTExpressionKind::FloatingLiteral(f),
+        }
+    }
+
+    fn boolean(b: bool) -> Self {
+        Self {
+            kind: ASTExpressionKind::BooleanLiteral(b),
         }
     }
 
@@ -503,6 +525,7 @@ mod test {
     enum TestASTNode {
         Floating(f64),
         Integer(i64),
+        Boolean(bool),
         Variable(String),
         Let(String, TokenKind),
         Var(String, TokenKind),
@@ -546,7 +569,7 @@ mod test {
             assert_eq!(
                 self.expected.len(),
                 self.actual.len(),
-                "Expected {} nodes only has {} ",
+                "Expected {} nodes but has {} ",
                 self.expected.len(),
                 self.actual.len()
             );
@@ -561,7 +584,7 @@ mod test {
         }
     }
 
-    impl ASTVisitor for ASTVerifier {
+    impl ASTVisitor<()> for ASTVerifier {
         fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
             self.actual.push(TestASTNode::Return);
             self.visit_expression(&statement.expr);
@@ -589,7 +612,7 @@ mod test {
             if let super::ASTStatementKind::Compound(body) = &statement.then_branch.kind {
                 self.visit_compound_statement(body);
             }
-            if let Some(else_branch) = statement.else_branch {
+            if let Some(else_branch) = &statement.else_branch {
                 self.visit_statement(&else_branch.else_branch);
             }
         }
@@ -613,7 +636,7 @@ mod test {
             }
         }
 
-        fn visit_funtion_statement(&mut self, function: &super::ASTFunctionStatement) {
+        fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
             let mut args: Vec<(String, TokenKind)> = Vec::new();
             args.push((
                 function.identifier.span.literal.clone(),
@@ -676,8 +699,22 @@ mod test {
             self.actual.push(TestASTNode::Integer(integer.clone()));
         }
 
+        fn visit_boolean(&mut self, boolean: bool) {
+            self.actual.push(TestASTNode::Boolean(boolean));
+        }
+
         fn visit_float(&mut self, float: &f64) {
             self.actual.push(TestASTNode::Floating(float.clone()));
+        }
+
+        fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) -> () {
+            for stmnt in &statement.statements {
+                self.visit_statement(&stmnt);
+            }
+        }
+
+        fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {
+            todo!()
         }
     }
 
@@ -695,10 +732,14 @@ mod test {
 
     #[test]
     fn should_parse_return_statement() {
-        let input = "let a: i32 = 7;
-                           return a + 10;
-                           ";
+        let input = "\
+        func main() -> i32 {
+            let a: i32 = 7;
+            return a + 10;
+        }
+        ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::I32)]),
             TestASTNode::Let("a".to_string(), TokenKind::I32),
             TestASTNode::Integer(7),
             TestASTNode::Return,
@@ -799,12 +840,15 @@ mod test {
     #[test]
     fn should_parse_for_loop() {
         let input = "\
-        var a: u32 = 0;
-        for i in 0..10 {
-            a += i;
+        func main() {
+            var a: u32 = 0;
+            for i in 0..10 {
+                a += i;
+            }
         }
         ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::Void)]),
             TestASTNode::Var("a".to_string(), TokenKind::U32),
             TestASTNode::Integer(0),
             TestASTNode::For("i".to_string()),
@@ -823,12 +867,15 @@ mod test {
     #[test]
     fn should_parse_while_loop() {
         let input = "\
-        var a: i32 = 5;
-        while a > 0 {
-            a -= 1;
+        func main() {
+            var a: i32 = 5;
+            while a > 0 {
+                a -= 1;
+            }
         }
         ";
         let expected_ast = vec![
+            TestASTNode::FuncDecl(vec![("main".to_string(), TokenKind::Void)]),
             TestASTNode::Var("a".to_string(), TokenKind::I32),
             TestASTNode::Integer(5),
             TestASTNode::While,

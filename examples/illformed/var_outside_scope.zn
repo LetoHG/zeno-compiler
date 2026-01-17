@@ -1,0 +1,6 @@
+func main() {
+    if 1 {
+        let secret : i32 = 42;
+    }
+    println(secret); // Error: 'secret' is not in scope
+}

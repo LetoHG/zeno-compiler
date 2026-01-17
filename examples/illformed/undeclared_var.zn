@@ -1,0 +1,4 @@
+func main() {
+    println(x); // Error: 'x' not declared
+}
+

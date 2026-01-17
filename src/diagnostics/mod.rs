@@ -26,6 +26,8 @@ impl Diagnostic {
 
 pub struct DiagnosticsColletion {
     pub diagnostics: Vec<Diagnostic>,
+    pub count_errors: usize,
+    pub count_warnings: usize,
 }
 
 pub type DiagnosticsColletionCell = Rc<RefCell<DiagnosticsColletion>>;
@@ -34,19 +36,25 @@ impl DiagnosticsColletion {
     pub fn new() -> Self {
         Self {
             diagnostics: vec![],
+            count_errors: 0,
+            count_warnings: 0,
         }
     }
 
     pub fn clear(&mut self) {
         self.diagnostics.clear();
+        self.count_errors = 0;
+        self.count_warnings = 0;
     }
 
     pub fn report_error(&mut self, message: String, span: TextSpan) {
+        self.count_errors += 1;
         self.diagnostics
             .push(Diagnostic::new(message, DiagnosticKind::Error, span));
     }
 
     pub fn report_warning(&mut self, message: String, span: TextSpan) {
+        self.count_warnings += 1;
         self.diagnostics
             .push(Diagnostic::new(message, DiagnosticKind::Warning, span));
     }
@@ -67,8 +75,40 @@ impl DiagnosticsColletion {
         );
     }
 
+    pub fn report_undefined_function(&mut self, span: TextSpan) {
+        self.report_error(format!("Undefined function: {}", span.literal), span);
+    }
+
     pub fn report_undefined_variable(&mut self, span: TextSpan) {
         self.report_error(format!("Not found in this scope"), span);
+    }
+
+    pub fn report_undefined_identifier(&mut self, span: TextSpan) {
+        self.report_error(
+            format!("No identifier named '{}' in scope", span.literal),
+            span,
+        );
+    }
+
+    pub fn report_not_a_callable(&mut self, span: TextSpan) {
+        self.report_error(
+            format!("Identifier '{}' is not callable", span.literal),
+            span,
+        );
+    }
+    pub fn report_type_mismatch(
+        &mut self,
+        span: TextSpan,
+        found_type: String,
+        expected_type: String,
+    ) {
+        self.report_error(
+            format!(
+                "Type mismatch. Expected <{}>, but found <{}>",
+                expected_type, found_type
+            ),
+            span,
+        );
     }
 
     pub fn report_number_of_function_arguments_mismatch(

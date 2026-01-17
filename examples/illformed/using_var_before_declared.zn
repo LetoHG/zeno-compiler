@@ -1,0 +1,4 @@
+func main() {
+    println(a);  // Error: 'a' used before declaration
+    let a: i32 = 3;
+}

@@ -130,10 +130,10 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> ASTStatement {
-        self.consume_expected(TokenKind::Return);
+        let keyword = self.consume_expected(TokenKind::Return).clone();
         let expr = self.parse_expression();
         self.consume_expected(TokenKind::SemiColon);
-        ASTStatement::return_statement(expr)
+        ASTStatement::return_statement(keyword, expr)
     }
 
     fn parse_let_statement(&mut self) -> ASTStatement {
@@ -159,7 +159,7 @@ impl Parser {
     }
 
     fn parse_compound_statement(&mut self) -> ASTStatement {
-        self.consume_expected(TokenKind::LeftBrace);
+        let start_brace = self.consume_expected(TokenKind::LeftBrace).clone();
         let mut statements: Vec<ASTStatement> = Vec::new();
         while self.current_token().kind != TokenKind::RightBrace
             && self.current_token().kind != TokenKind::Eof
@@ -167,8 +167,8 @@ impl Parser {
             println!("Help {:?}", self.current_token());
             statements.push(self.parse_statement());
         }
-        self.consume_expected(TokenKind::RightBrace);
-        ASTStatement::compound(statements)
+        let end_brace = self.consume_expected(TokenKind::RightBrace).clone();
+        ASTStatement::compound(statements, start_brace, end_brace)
     }
 
     fn parse_function_statement(&mut self) -> ASTStatement {
@@ -244,7 +244,7 @@ impl Parser {
             return None;
         }
         let else_keyword = self.consume_expected(TokenKind::Else).clone();
-        let else_branch = self.parse_compound_statement();
+        let else_branch = self.parse_statement();
         Some(ASTElseStatement {
             else_keyword: else_keyword,
             else_branch: Box::new(else_branch),
@@ -314,7 +314,7 @@ impl Parser {
             if self.peek(1).kind == TokenKind::PlusEqual
                 || self.peek(1).kind == TokenKind::MinusEqual
                 || self.peek(1).kind == TokenKind::AstriskEqual
-                || self.peek(1).kind == TokenKind::Slash
+                || self.peek(1).kind == TokenKind::SlashEqual
             {
                 let var = self.consume().clone();
                 let op = self.consume_assignment_operator();
@@ -372,7 +372,7 @@ impl Parser {
     }
 
     fn parse_primary_expression(&mut self) -> ASTExpression {
-        let token = self.consume().clone();
+        let token: Token = self.consume().clone();
 
         return match token.kind {
             TokenKind::Integer(i) => ASTExpression::integer(i),
@@ -380,6 +380,10 @@ impl Parser {
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
+                } else if token.name() == "false" {
+                    ASTExpression::boolean(false)
+                } else if token.name() == "true" {
+                    ASTExpression::boolean(true)
                 } else {
                     ASTExpression::identifier(token.clone())
                 }

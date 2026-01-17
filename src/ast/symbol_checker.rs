@@ -49,7 +49,7 @@ impl SymbolChecker {
     }
 }
 
-impl ASTVisitor for SymbolChecker {
+impl ASTVisitor<()> for SymbolChecker {
     fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
         self.visit_expression(&statement.expr);
     }
@@ -83,7 +83,7 @@ impl ASTVisitor for SymbolChecker {
 
     fn visit_while_loop_statement(&mut self, statement: &super::ASTWhileStatement) {}
 
-    fn visit_funtion_statement(&mut self, function: &super::ASTFunctionStatement) {
+    fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
         self.add_identifier_to_scope(&function.identifier.span.literal);
 
         let mut arguments_names: Vec<String> = Vec::new();
@@ -159,6 +159,8 @@ impl ASTVisitor for SymbolChecker {
     }
 
     fn visit_binary_operator(&mut self, op: &super::ASTBinaryOperator) {}
+    fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {}
     fn visit_integer(&mut self, integer: &i64) {}
+    fn visit_boolean(&mut self, boolean: bool) {}
     fn visit_float(&mut self, float: &f64) {}
 }

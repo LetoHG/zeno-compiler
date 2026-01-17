@@ -1,0 +1,9 @@
+func main() {
+    let value: i32 = 10;
+    {
+        let value: i32 = 20;
+        println(value); // prints 20
+    }
+    println(value); // prints 10
+}
+

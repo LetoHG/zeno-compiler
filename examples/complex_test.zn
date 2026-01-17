@@ -1,0 +1,67 @@
+// Return the sum of integers in the range [start, end)
+func sum_range(start: i32, end: i32) -> i32 {
+    var sum: i32 = 0;
+    var i: i32 = start;
+
+    while i < end {
+        sum = sum + i;
+        i = i + 1;
+    }
+
+    return sum;
+}
+
+
+func average_range(start: i32, end: i32) -> f32 {
+    if start > end {
+        return 0.0;
+    }
+
+    let total: i32 = sum_range(start, end);
+    let count: i32 = end - start;
+
+    // Tests numeric type rules (i32 -> f32)
+    let avg: f32 = total / count;
+    return avg;
+}
+
+// Clamp a value between min and max
+func clamp(value: i32, min: i32, max: i32) -> i32 {
+    if value < min {
+        return min;
+    } else if value > max {
+        return max;
+    }
+
+    return value;
+}
+
+let global_var : i32 = 42;
+
+func main() -> i32 {
+    let start: i32 = 0;
+    let end: i32 = 10;
+
+    let sum: i32 = sum_range(start, end);
+    // println("Sum:");
+    println(sum);
+
+    let avg: f32 = average_range(start, end);
+    // println("Average:");
+    println(avg);
+
+    var x: i32 = 15;
+    x = clamp(x, 0, 10);
+
+    // println("Clamped value:");
+    println(x);
+
+    // For-loop scope + typing test
+    for i in 0..5 {
+        println(i);
+        let squared: i32 = i * i;
+        println(squared);
+    }
+
+    return 0;
+}
