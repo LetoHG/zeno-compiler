@@ -1,5 +1,5 @@
 func sum_until(upper : i32, threshold : i32) -> i32 {
-    let sum : i32 = 0;
+    var sum : i32 = 0;
     for i in 0..upper {
         sum += i;
         if sum > threshold {
