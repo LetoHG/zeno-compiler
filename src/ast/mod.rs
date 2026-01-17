@@ -130,6 +130,16 @@ enum ASTStatementKind {
     For(ASTForStatement),
 }
 
+#[derive(Clone, Debug)]
+enum ASTDataType {
+    Void,
+    Int,
+    Float,
+    Bool,
+    Array(ASTExpression, Box<ASTDataType>),
+    UserDefined(String),
+}
+
 #[derive(Clone)]
 pub struct ASTLetStatement {
     identifier: Token,
@@ -308,7 +318,7 @@ impl ASTStatement {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum ASTExpressionKind {
     IntegerLiteral(i64),
     BooleanLiteral(bool),
@@ -323,7 +333,7 @@ enum ASTExpressionKind {
     Error(TextSpan),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTExpression {
     kind: ASTExpressionKind,
 }
@@ -407,19 +417,19 @@ impl ASTExpression {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum ASTUnaryOperatorKind {
     Minus,
     BitwiseNOT,
     LogicNot,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 struct ASTUnaryOperator {
     kind: ASTUnaryOperatorKind,
     token: lexer::Token,
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTUnaryExpression {
     operator: ASTUnaryOperator,
     expr: Box<ASTExpression>,
@@ -472,24 +482,24 @@ impl ASTBinaryOperator {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTBinaryExpression {
     operator: ASTBinaryOperator,
     left: Box<ASTExpression>,
     right: Box<ASTExpression>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTParenthesizedExpression {
     expr: Box<ASTExpression>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTVariableExpression {
     identifier: Token,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTAssignmentExpression {
     identifier: Token,
     expr: Box<ASTExpression>,
@@ -501,7 +511,7 @@ impl ASTVariableExpression {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ASTFunctionCallExpression {
     identifier: Token,
     arguments: Vec<ASTExpression>,

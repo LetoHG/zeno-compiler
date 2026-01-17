@@ -9,19 +9,9 @@ use std::{
 
 use super::lexer::TextSpan;
 use super::{
-    ASTBinaryOperator, ASTBinaryOperatorKind, ASTElseStatement, ASTUnaryOperator,
+    ASTBinaryOperator, ASTBinaryOperatorKind, ASTDataType, ASTElseStatement, ASTUnaryOperator,
     ASTUnaryOperatorKind, FunctionArgumentDeclaration,
 };
-
-#[derive(Debug, PartialEq, Clone)]
-enum DataType {
-    Void,
-    Int,
-    Float,
-    Bool,
-    Array(usize, Box<DataType>),
-    UserDefined(String),
-}
 
 struct Cursor {
     cursor: Cell<usize>,
@@ -506,80 +496,68 @@ impl Parser {
         })
     }
 
-    fn parse_data_type(&mut self) -> Option<DataType> {
+    fn parse_data_type(&mut self) -> Option<ASTDataType> {
         let token = self.current_token();
         match token.kind {
             TokenKind::LeftBracket => {
                 self.consume();
-                // let token = self.consume_expected(TokenKind::Integer(0))?.clone();
-                let size_token = self.current_token();
-                let size = match size_token.kind {
-                    TokenKind::Integer(i) => i as usize,
-                    _ => {
-                        self.diagnostics_colletion
-                            .borrow_mut()
-                            .report_unexpected_token(&TokenKind::Integer(0), size_token);
-
-                        return None;
-                    }
-                };
-                self.consume();
+                let size_expr = self.parse_expression()?;
                 self.consume_expected(TokenKind::RightBracket)?;
                 let data_type = self.parse_data_type()?;
-                Some(DataType::Array(size, Box::new(data_type)))
+                Some(ASTDataType::Array(size_expr, Box::new(data_type)))
             }
             TokenKind::Ampersand => todo!(),
             TokenKind::Identifier => {
                 self.consume();
-                Some(DataType::UserDefined(token.name()))
+                Some(ASTDataType::UserDefined(token.name()))
             }
             TokenKind::I8 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::I16 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::I32 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::I64 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::U8 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::U16 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::U32 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::U64 => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::F32 => {
                 self.consume();
-                Some(DataType::Float)
+                Some(ASTDataType::Float)
             }
             TokenKind::F64 => {
                 self.consume();
-                Some(DataType::Float)
+                Some(ASTDataType::Float)
             }
             TokenKind::Bool => {
                 self.consume();
-                Some(DataType::Bool)
+                Some(ASTDataType::Bool)
             }
             TokenKind::Char => {
                 self.consume();
-                Some(DataType::Int)
+                Some(ASTDataType::Int)
             }
             TokenKind::Str => todo!(),
             _ => {
