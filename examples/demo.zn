@@ -24,5 +24,6 @@ func max(arg1 : i32, arg2 : u8) -> i32 {
 }
 
 func main() -> i64 {
+    let a : str = "String" ;
     return max(7, 5);
 }

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, ops::Not};
 
+use crate::ast::ASTExpressionKind;
+
 use super::{
     lexer::{TextSpan, TokenKind},
     ASTBinaryOperator, ASTBinaryOperatorKind, ASTFunctionStatement, ASTReturnStatement, ASTVisitor,
@@ -104,7 +106,10 @@ impl ASTVisitor<Option<()>> for ASTSolver {
 
     fn visit_let_statement(&mut self, statement: &super::ASTLetStatement) -> Option<()> {
         self.visit_expression(&statement.initializer);
-        self.add_identifier_to_scope(&statement.identifier.span.literal, self.result.unwrap());
+        self.add_identifier_to_scope(
+            &statement.identifier.span.literal,
+            self.result.unwrap_or_else(|| 0.0),
+        );
         None
     }
 
@@ -130,20 +135,20 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         self.visit_expression(&statement.range.0);
         let range_start = self.result.unwrap() as i64;
         self.visit_expression(&statement.range.1);
-        let range_end = self.result.unwrap() as i64 + 1;
+        let range_end = self.result.unwrap() as i64;
         let loop_var = statement.loop_variable.span.literal.clone();
 
         self.enter_scope(Scope::new());
         self.add_identifier_to_scope(&loop_var, range_start as f64);
 
         for i in range_start..range_end {
-            let ret = self.visit_statement(&statement.body);
             for scope in self.scopes.iter_mut().rev() {
                 if let Some(value) = scope.get_mut(&loop_var) {
                     *value = i as f64;
                     break;
                 }
             }
+            let ret = self.visit_statement(&statement.body);
             if ret.is_some() {
                 self.leave_scope();
                 return ret;
@@ -196,16 +201,40 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         expr: &super::ASTFunctionCallExpression,
     ) -> Option<()> {
         // TODO(letohg): [2025-07-19] support for builtin functions
-        if expr.identifier() == "println" {
+        if expr.identifier() == "print" {
             for arg_expr in expr.arguments.iter() {
-                self.visit_expression(&arg_expr);
-                // let arg_name = func_arg.identifier.span.literal.clone();
+                match &arg_expr.kind {
+                    ASTExpressionKind::StringLiteral(s) => {
+                        print!("{}", s);
+                    }
+                    _ => {
+                        self.visit_expression(&arg_expr);
+                        // let arg_name = func_arg.identifier.span.literal.clone();
 
-                println!("println: {}", self.result.unwrap());
+                        print!("{}", self.result.unwrap());
+                    }
+                }
             }
-            if expr.arguments.len() == 0 {
-                println!("");
+            return None;
+        }
+        if expr.identifier() == "println" {
+            for (i, arg_expr) in expr.arguments.iter().enumerate() {
+                match &arg_expr.kind {
+                    ASTExpressionKind::StringLiteral(s) => {
+                        print!("{}", s);
+                    }
+                    _ => {
+                        self.visit_expression(&arg_expr);
+                        // let arg_name = func_arg.identifier.span.literal.clone();
+
+                        print!("{}", self.result.unwrap());
+                    }
+                }
+                if i + 1 < expr.arguments.len() {
+                    print!(", ");
+                }
             }
+            println!("");
             return None;
         }
 
@@ -303,6 +332,9 @@ impl ASTVisitor<Option<()>> for ASTSolver {
     }
     fn visit_boolean(&mut self, boolean: bool) -> Option<()> {
         self.result = Some(boolean as i64 as f64);
+        None
+    }
+    fn visit_string_literal(&mut self, string: &String) -> Option<()> {
         None
     }
     fn visit_float(&mut self, float: &f64) -> Option<()> {

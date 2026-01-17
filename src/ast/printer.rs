@@ -336,6 +336,10 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.print(&format!("Integer: {}", boolean), &Self::TEXT_COLOR);
     }
 
+    fn visit_string_literal(&mut self, string: &String) {
+        self.print(&format!("String: {}", string), &Self::TEXT_COLOR);
+    }
+
     fn visit_float(&mut self, float: &f64) {
         self.print(&format!("Float: {}", float), &Self::TEXT_COLOR);
     }
@@ -668,6 +672,9 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
     }
     fn visit_boolean(&mut self, boolean: bool) {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), boolean));
+    }
+    fn visit_string_literal(&mut self, string: &String) {
+        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), string));
     }
 
     fn visit_float(&mut self, float: &f64) {

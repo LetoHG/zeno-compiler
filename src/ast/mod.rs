@@ -60,7 +60,7 @@ pub trait ASTVisitor<T> {
             ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone()),
             ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
             ASTExpressionKind::Variable(expr) => self.visit_variable_expression(expr),
-            ASTExpressionKind::StringLiteral(_) => todo!(),
+            ASTExpressionKind::StringLiteral(s) => self.visit_string_literal(s),
             ASTExpressionKind::Unary(expr) => self.visit_unary_expression(expr),
             ASTExpressionKind::Binary(expr) => self.visit_binary_expression(expr),
             ASTExpressionKind::Parenthesized(expr) => self.visit_parenthesised_expression(expr),
@@ -114,6 +114,7 @@ pub trait ASTVisitor<T> {
     fn visit_error(&mut self, span: &TextSpan) -> T;
     fn visit_integer(&mut self, integer: &i64) -> T;
     fn visit_boolean(&mut self, boolean: bool) -> T;
+    fn visit_string_literal(&mut self, string: &String) -> T;
     fn visit_float(&mut self, float: &f64) -> T;
 }
 
@@ -354,6 +355,11 @@ impl ASTExpression {
             kind: ASTExpressionKind::BooleanLiteral(b),
         }
     }
+    fn string(s: String) -> Self {
+        Self {
+            kind: ASTExpressionKind::StringLiteral(s),
+        }
+    }
 
     fn identifier(token: Token) -> Self {
         Self {
@@ -526,6 +532,7 @@ mod test {
         Floating(f64),
         Integer(i64),
         Boolean(bool),
+        String(String),
         Variable(String),
         Let(String, TokenKind),
         Var(String, TokenKind),
@@ -703,6 +710,9 @@ mod test {
             self.actual.push(TestASTNode::Boolean(boolean));
         }
 
+        fn visit_string_literal(&mut self, string: &String) {
+            self.actual.push(TestASTNode::StringLiteral(string.clone()));
+        }
         fn visit_float(&mut self, float: &f64) {
             self.actual.push(TestASTNode::Floating(float.clone()));
         }

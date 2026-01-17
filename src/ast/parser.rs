@@ -80,6 +80,9 @@ impl Parser {
     }
 
     pub fn next_statement(&mut self) -> Option<ASTStatement> {
+        while (self.current_token().kind == TokenKind::SemiColon) {
+            self.consume();
+        }
         if self.current_token().kind == TokenKind::Eof {
             return None;
         }
@@ -398,13 +401,11 @@ impl Parser {
         return match token.kind {
             TokenKind::Integer(i) => Some(ASTExpression::integer(i)),
             TokenKind::Floating(i) => Some(ASTExpression::float(i)),
+            TokenKind::StringLiteral(i) => Some(ASTExpression::string(i)),
+            TokenKind::Boolean(b) => Some(ASTExpression::boolean(b)),
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
-                } else if token.name() == "false" {
-                    Some(ASTExpression::boolean(false))
-                } else if token.name() == "true" {
-                    Some(ASTExpression::boolean(true))
                 } else {
                     Some(ASTExpression::identifier(token.clone()))
                 }

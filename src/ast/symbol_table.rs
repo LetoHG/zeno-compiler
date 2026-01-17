@@ -121,6 +121,7 @@ enum DataType {
     Int,
     Float,
     Bool,
+    Str,
     UserDefined(String),
 }
 
@@ -143,6 +144,7 @@ impl DataType {
             "f32" => Self::Float,
             "f64" => Self::Float,
             "bool" => Self::Bool,
+            "str" => Self::Str,
             _ => Self::UserDefined(type_name.clone()),
         }
     }
@@ -152,6 +154,7 @@ impl DataType {
             Self::Int => "i32".to_string(),
             Self::Float => "f32".to_string(),
             Self::Bool => "bool".to_string(),
+            Self::Str => "str".to_string(),
             Self::UserDefined(name) => name.clone(),
         }
     }
@@ -631,7 +634,8 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
             Pass::CollectSymbols => None,
             Pass::TypeCheck => {
                 let mut func_return_type = DataType::Void;
-                if expr.identifier() == "println" {
+                if expr.identifier() == "print" {
+                } else if expr.identifier() == "println" {
                 } else if self.lookup(&expr.identifier().to_string()).is_none() {
                     self.diagnostics
                         .borrow_mut()
@@ -856,6 +860,12 @@ impl ASTVisitor<Option<DataType>> for SymbolTable {
         match self.pass {
             Pass::CollectSymbols => None,
             Pass::TypeCheck => Some(DataType::Bool),
+        }
+    }
+    fn visit_string_literal(&mut self, string: &String) -> Option<DataType> {
+        match self.pass {
+            Pass::CollectSymbols => None,
+            Pass::TypeCheck => Some(DataType::Str),
         }
     }
     fn visit_float(&mut self, float: &f64) -> Option<DataType> {

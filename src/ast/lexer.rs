@@ -5,7 +5,9 @@ pub enum TokenKind {
     // Litarals
     Integer(i64),
     Floating(f64),
+    Boolean(bool),
     Identifier,
+    StringLiteral(String),
 
     // Keywords
     Let,
@@ -252,6 +254,8 @@ impl Lexer {
                 "f32" => TokenKind::F32,
                 "f64" => TokenKind::F64,
                 "bool" => TokenKind::Bool,
+                "false" => TokenKind::Boolean(false),
+                "true" => TokenKind::Boolean(true),
                 "char" => TokenKind::Char,
                 "str" => TokenKind::Str,
                 "struct" => TokenKind::Struct,
@@ -263,6 +267,8 @@ impl Lexer {
             kind = self.consume_single_line_comment();
         } else if c == '/' && self.peek(1)? == '*' {
             kind = self.consume_multi_line_comment();
+        } else if c == '"' {
+            kind = self.consume_string_literal();
         } else if Self::is_whitespace(&c) {
             self.consume();
             kind = TokenKind::Whitespace;
@@ -345,6 +351,22 @@ impl Lexer {
             comment.push(c);
         }
         TokenKind::MultiLineComment(comment)
+    }
+
+    fn consume_string_literal(&mut self) -> TokenKind {
+        self.consume(); // consume "
+        let mut s: String = "".to_string();
+        while let Some(c) = self.consume() {
+            if c == '"' {
+                break;
+            }
+            s.push(c);
+            if Self::is_linebreak(&c) {
+                break;
+            }
+        }
+        println!("Found String: '{}'", s);
+        TokenKind::StringLiteral(s)
     }
 
     fn consume_number(&mut self) -> TokenKind {

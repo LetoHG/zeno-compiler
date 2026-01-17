@@ -43,7 +43,7 @@ func main() -> i32 {
     let end: i32 = 10;
 
     let sum: i32 = sum_range(start, end);
-    // println("Sum:");
+    print("Sum:");
     println(sum);
 
     let avg: f32 = average_range(start, end);
@@ -58,9 +58,8 @@ func main() -> i32 {
 
     // For-loop scope + typing test
     for i in 0..5 {
-        println(i);
         let squared: i32 = i * i;
-        println(squared);
+        println("Square:", i, squared);
     }
 
     return 0;

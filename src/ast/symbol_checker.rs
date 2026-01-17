@@ -162,5 +162,7 @@ impl ASTVisitor<()> for SymbolChecker {
     fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {}
     fn visit_integer(&mut self, integer: &i64) {}
     fn visit_boolean(&mut self, boolean: bool) {}
+    fn visit_string_literal(&mut self, string: &String) {}
+
     fn visit_float(&mut self, float: &f64) {}
 }
