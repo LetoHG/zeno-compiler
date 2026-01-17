@@ -3,6 +3,7 @@ func sum_range(start: i32, end: i32) -> i32 {
     var sum: i32 = 0;
     var i: i32 = start;
 
+    let arr : [7][42]Point;
     while i < end {
         sum = sum + i;
         i = i + 1;

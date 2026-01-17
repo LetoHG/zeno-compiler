@@ -13,6 +13,16 @@ use super::{
     ASTUnaryOperatorKind, FunctionArgumentDeclaration,
 };
 
+#[derive(Debug, PartialEq, Clone)]
+enum DataType {
+    Void,
+    Int,
+    Float,
+    Bool,
+    Array(usize, Box<DataType>),
+    UserDefined(String),
+}
+
 struct Cursor {
     cursor: Cell<usize>,
 }
@@ -141,11 +151,14 @@ impl Parser {
         self.consume_expected(TokenKind::Let)?;
         let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
         self.consume_expected(TokenKind::Colon)?;
-        let data_type = self.consume().clone();
-        self.consume_expected(TokenKind::Equal)?;
-        let expr = self.parse_expression()?;
-        self.consume_expected(TokenKind::SemiColon)?;
-        Some(ASTStatement::let_statement(identifier, data_type, expr))
+        // let data_type = self.consume().clone();
+        let data_type = self.parse_data_type()?;
+        println!("Data Type {:?}", data_type);
+        return None;
+        // self.consume_expected(TokenKind::Equal)?;
+        // let expr = self.parse_expression()?;
+        // self.consume_expected(TokenKind::SemiColon)?;
+        // Some(ASTStatement::let_statement(identifier, data_type, expr))
     }
 
     fn parse_var_statement(&mut self) -> Option<ASTStatement> {
@@ -491,5 +504,90 @@ impl Parser {
                 token: token.clone(),
             };
         })
+    }
+
+    fn parse_data_type(&mut self) -> Option<DataType> {
+        let token = self.current_token();
+        match token.kind {
+            TokenKind::LeftBracket => {
+                self.consume();
+                // let token = self.consume_expected(TokenKind::Integer(0))?.clone();
+                let size_token = self.current_token();
+                let size = match size_token.kind {
+                    TokenKind::Integer(i) => i as usize,
+                    _ => {
+                        self.diagnostics_colletion
+                            .borrow_mut()
+                            .report_unexpected_token(&TokenKind::Integer(0), size_token);
+
+                        return None;
+                    }
+                };
+                self.consume();
+                self.consume_expected(TokenKind::RightBracket)?;
+                let data_type = self.parse_data_type()?;
+                Some(DataType::Array(size, Box::new(data_type)))
+            }
+            TokenKind::Ampersand => todo!(),
+            TokenKind::Identifier => {
+                self.consume();
+                Some(DataType::UserDefined(token.name()))
+            }
+            TokenKind::I8 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::I16 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::I32 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::I64 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::U8 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::U16 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::U32 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::U64 => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::F32 => {
+                self.consume();
+                Some(DataType::Float)
+            }
+            TokenKind::F64 => {
+                self.consume();
+                Some(DataType::Float)
+            }
+            TokenKind::Bool => {
+                self.consume();
+                Some(DataType::Bool)
+            }
+            TokenKind::Char => {
+                self.consume();
+                Some(DataType::Int)
+            }
+            TokenKind::Str => todo!(),
+            _ => {
+                self.diagnostics_colletion
+                    .borrow_mut()
+                    .report_error(format!("Expected datatype"), token.span.clone());
+                None
+            }
+        }
     }
 }
