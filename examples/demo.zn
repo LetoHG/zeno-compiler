@@ -23,4 +23,6 @@ func max(arg1 : i32, arg2 : u8) -> i32 {
   }
 }
 
-return max(7, 5);
+func main() -> i64 {
+    return max(7, 5);
+}
