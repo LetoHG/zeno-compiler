@@ -61,6 +61,7 @@ pub trait ASTVisitor<T> {
             ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone()),
             ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
             ASTExpressionKind::Variable(expr) => self.visit_variable_expression(expr),
+            ASTExpressionKind::MemberAccess(expr) => self.visit_member_access_expression(expr),
             ASTExpressionKind::StringLiteral(_) => todo!(),
             ASTExpressionKind::StructCtor(statement) => {
                 self.visit_struct_initializer_expression(statement)
@@ -116,6 +117,7 @@ pub trait ASTVisitor<T> {
     fn visit_assignment_expression(&mut self, expr: &ASTAssignmentExpression) -> T;
     fn visit_function_call_expression(&mut self, expr: &ASTFunctionCallExpression) -> T;
     fn visit_variable_expression(&mut self, expr: &ASTVariableExpression) -> T;
+    fn visit_member_access_expression(&mut self, _expr: &ASTMemberAccessExpression) -> T;
 
     fn visit_unary_expression(&mut self, expr: &ASTUnaryExpression) -> T;
     fn visit_binary_expression(&mut self, expr: &ASTBinaryExpression) -> T;
@@ -352,6 +354,7 @@ enum ASTExpressionKind {
     Binary(ASTBinaryExpression),
     Parenthesized(ASTParenthesizedExpression),
     Variable(ASTVariableExpression),
+    MemberAccess(ASTMemberAccessExpression),
     Assignment(ASTAssignmentExpression),
     FunctionCall(ASTFunctionCallExpression),
     Error(TextSpan),
@@ -392,6 +395,15 @@ impl ASTExpression {
     fn identifier(token: Token) -> Self {
         Self {
             kind: ASTExpressionKind::Variable(ASTVariableExpression { identifier: token }),
+        }
+    }
+
+    fn member_access(token: Token, expr: ASTExpression) -> Self {
+        Self {
+            kind: ASTExpressionKind::MemberAccess(ASTMemberAccessExpression {
+                identifier: token,
+                member: Box::new(expr),
+            }),
         }
     }
 
@@ -532,6 +544,12 @@ pub struct ASTParenthesizedExpression {
 #[derive(Clone, PartialEq)]
 pub struct ASTVariableExpression {
     identifier: Token,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTMemberAccessExpression {
+    identifier: Token,
+    member: Box<ASTExpression>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -739,6 +757,8 @@ mod test {
             self.actual
                 .push(TestASTNode::Variable(expr.identifier.span.literal.clone()));
         }
+
+        fn visit_member_access_expression(&mut self, _expr: &super::ASTMemberAccessExpression) {}
 
         fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) {
             self.actual

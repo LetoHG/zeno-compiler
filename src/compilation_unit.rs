@@ -1,6 +1,5 @@
 use crate::ast::symbol_table;
 use crate::ast::symbol_table_builder;
-use crate::ast::symbol_table_builder::SymbolTableBuilder;
 use crate::ast::type_checker;
 use crate::{ast, diagnostics};
 use ast::lexer::Token;

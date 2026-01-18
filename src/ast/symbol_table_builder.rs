@@ -1,6 +1,8 @@
 use crate::{
-    ast::symbol_table::{DataType, FunctionInfo, Symbol, SymbolTable, VariableInfo},
-    diagnostics::DiagnosticsColletionCell,
+    ast::symbol_table::{
+        DataType, FunctionInfo, StructDataMember, Symbol, SymbolTable, VariableInfo,
+    },
+    diagnostics::{self, DiagnosticsColletionCell},
 };
 
 use super::ASTVisitor;
@@ -21,27 +23,8 @@ impl<'a> SymbolTableBuilder<'a> {
         ast.visit(self);
     }
 
-    fn enter_scope(&mut self) {
-        self.symbol_table.enter_scope();
-    }
-
-    fn exit_scope(&mut self) {
-        self.symbol_table.exit_scope();
-    }
-
-    fn declare_global_identifier(&mut self, symbol: Symbol) {
+    fn declare_global_identifier(&mut self, symbol: Symbol) -> bool {
         self.symbol_table.declare_global_identifier(symbol)
-    }
-    fn declare_local_identifier(&mut self, symbol: Symbol) {
-        self.symbol_table.declare_local_identifier(symbol)
-    }
-
-    fn is_identifier_in_current_scope(&self, name: &str) -> bool {
-        self.symbol_table.is_identifier_in_current_scope(name)
-    }
-
-    fn is_global_scope(&self) -> bool {
-        self.symbol_table.is_global_scope()
     }
 
     fn lookup(&self, name: &str) -> Option<&Symbol> {
@@ -63,17 +46,29 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_let_statement(&mut self, statement: &super::ASTLetStatement) {
-        self.declare_global_identifier(Symbol::Constant(VariableInfo {
+        let success = self.declare_global_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
             data_type: DataType::from_token(&statement.data_type),
         }));
+        if !success {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Redefinition of global identifier"),
+                statement.identifier.span.clone(),
+            )
+        }
     }
 
     fn visit_var_statement(&mut self, statement: &super::ASTVarStatement) {
-        self.declare_global_identifier(Symbol::Variable(VariableInfo {
+        let success = self.declare_global_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
             data_type: DataType::from_token(&statement.data_type),
         }));
+        if !success {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Redefinition of global identifier"),
+                statement.identifier.span.clone(),
+            )
+        }
     }
 
     fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) {
@@ -115,23 +110,51 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
             // argument_types.push(arg.identifier.span.literal.clone());
             argument_types.push(DataType::from_token(&arg.data_type));
         }
-        self.declare_global_identifier(Symbol::Function(FunctionInfo {
+        let success = self.declare_global_identifier(Symbol::Function(FunctionInfo {
             name: function.identifier.name(),
             parameters: argument_types,
             return_type: DataType::from_token(&function.return_type),
         }));
+        if !success {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Redefinition of global identifier"),
+                function.identifier.span.clone(),
+            )
+        }
     }
 
-    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
+    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {
+        let mut members: Vec<StructDataMember> = Vec::new();
+        // add arguments to scope of local variable call
+        for member in struct_def.members.iter() {
+            // argument_types.push(arg.identifier.span.literal.clone());
+            members.push(StructDataMember {
+                name: member.identifier.name(),
+                data_type: DataType::from_token(&member.data_type),
+            });
+        }
+
+        let success = self.declare_global_identifier(Symbol::Variable(VariableInfo {
+            name: struct_def.identifier.name(),
+            data_type: DataType::Struct(struct_def.identifier.name(), members),
+        }));
+        if !success {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Redefinition of global identifier"),
+                struct_def.identifier.span.clone(),
+            )
+        }
+    }
     fn visit_struct_initializer_expression(
         &mut self,
-        struct_initializer: &super::ASTStructInitializerExpression,
+        _struct_initializer: &super::ASTStructInitializerExpression,
     ) {
     }
 
     fn visit_assignment_expression(&mut self, _expr: &super::ASTAssignmentExpression) {}
     fn visit_function_call_expression(&mut self, _expr: &super::ASTFunctionCallExpression) {}
     fn visit_variable_expression(&mut self, _expr: &super::ASTVariableExpression) {}
+    fn visit_member_access_expression(&mut self, _expr: &super::ASTMemberAccessExpression) {}
     fn visit_unary_expression(&mut self, _expr: &super::ASTUnaryExpression) {}
     fn visit_binary_expression(&mut self, _expr: &super::ASTBinaryExpression) {}
     fn visit_parenthesised_expression(&mut self, _expr: &super::ASTParenthesizedExpression) {}

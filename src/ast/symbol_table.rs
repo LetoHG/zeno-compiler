@@ -157,8 +157,8 @@ impl fmt::Display for BuiltinDataType {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructDataMember {
-    name: String, // TODO(letohg): [2026-01-18] create type id system
-    data_type: DataType,
+    pub name: String, // TODO(letohg): [2026-01-18] create type id system
+    pub data_type: DataType,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -315,13 +315,15 @@ impl SymbolTable {
         self.scopes.pop();
     }
 
-    pub fn declare_global_identifier(&mut self, symbol: Symbol) {
+    pub fn declare_global_identifier(&mut self, symbol: Symbol) -> bool {
         if self.global_scope.contains_key(&symbol.name()) {
             // TODO(letohg): [2025-07-18] output diagnostic message
-            // return Err(format!("Redefinition of global symbol `{}`", symbol.name));
+            // return Err(format!("Redefinition of global symbol `{}`", symbol.name()));
+            return false;
         }
 
         self.global_scope.insert(symbol.name(), symbol);
+        true
     }
     pub fn declare_local_identifier(&mut self, symbol: Symbol) {
         let scope = self.scopes.last_mut().expect("No scope available");
@@ -348,5 +350,19 @@ impl SymbolTable {
             }
         }
         self.global_scope.get(name)
+    }
+
+    pub fn get_type_definition_of(&self, name: &str) -> Option<&Symbol> {
+        let var: &Symbol = self.lookup(name)?;
+        match var {
+            Symbol::Variable(st) | Symbol::Constant(st) => match &st.data_type {
+                DataType::Struct(n, m) => {
+                    // println!("Variable {} of type {}", _expr.identifier.name(), n);
+                    return self.lookup(n);
+                }
+                _ => return None,
+            },
+            _ => None,
+        }
     }
 }

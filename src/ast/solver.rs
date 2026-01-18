@@ -22,7 +22,7 @@ impl ASTSolver {
     }
 
     pub fn solve(&mut self) {
-        if let Some(entry_point) = self.functions.get("main") {
+        if let Some(_) = self.functions.get("main") {
             self.result = None;
             self.visit_function_call_expression(&super::ASTFunctionCallExpression {
                 identifier: super::lexer::Token {
@@ -180,13 +180,13 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) -> Option<()> {
+    fn visit_struct_statement(&mut self, _struct_def: &super::ASTStructStatement) -> Option<()> {
         None
     }
 
     fn visit_struct_initializer_expression(
         &mut self,
-        struct_initializer: &super::ASTStructInitializerExpression,
+        _struct_initializer: &super::ASTStructInitializerExpression,
     ) -> Option<()> {
         None
     }
@@ -258,6 +258,13 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
+    fn visit_member_access_expression(
+        &mut self,
+        _expr: &super::ASTMemberAccessExpression,
+    ) -> Option<()> {
+        None
+    }
+
     fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) -> Option<()> {
         self.visit_expression(&expr.expr);
         self.result = Some(match expr.operator.kind {
@@ -299,11 +306,11 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         return self.visit_expression(&expr.expr);
     }
 
-    fn visit_binary_operator(&mut self, op: &ASTBinaryOperator) -> Option<()> {
+    fn visit_binary_operator(&mut self, _op: &ASTBinaryOperator) -> Option<()> {
         None
     }
 
-    fn visit_error(&mut self, span: &super::lexer::TextSpan) -> Option<()> {
+    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<()> {
         None
     }
 

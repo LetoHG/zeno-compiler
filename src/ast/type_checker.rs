@@ -1,8 +1,11 @@
+use termion::raw::IntoRawMode;
+
 use crate::ast::symbol_table::DataType;
 use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
 use crate::ast::symbol_table::VariableInfo;
+use crate::ast::ASTVariableExpression;
 use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsColletionCell};
 
 use super::{ASTStatementKind, ASTVisitor};
@@ -32,9 +35,6 @@ impl<'a> TypeChecker<'a> {
         self.symbol_table.exit_scope();
     }
 
-    fn declare_global_identifier(&mut self, symbol: Symbol) {
-        self.symbol_table.declare_global_identifier(symbol)
-    }
     fn declare_local_identifier(&mut self, symbol: Symbol) {
         self.symbol_table.declare_local_identifier(symbol)
     }
@@ -269,7 +269,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         statement: &super::ASTWhileStatement,
     ) -> Option<DataType> {
         let condition_type = self.visit_expression(&statement.condition)?;
-        if condition_type.is_bool() {
+        if !condition_type.is_bool() {
             self.diagnostics.borrow_mut().report_error(
                 format!("Condition must be of type Bool"),
                 statement.keyword.span.clone(),
@@ -312,7 +312,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_struct_initializer_expression(
         &mut self,
-        struct_initializer: &super::ASTStructInitializerExpression,
+        _struct_initializer: &super::ASTStructInitializerExpression,
     ) -> Option<DataType> {
         None
     }
@@ -439,6 +439,35 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         // Some(DataType::Void)
     }
 
+    fn visit_member_access_expression(
+        &mut self,
+        _expr: &super::ASTMemberAccessExpression,
+    ) -> Option<DataType> {
+        println!("{}", _expr.identifier.name());
+        match &_expr.member.kind {
+            super::ASTExpressionKind::Variable(e) => {
+                let struc = self
+                    .symbol_table
+                    .get_type_definition_of(_expr.identifier.name().as_str())?;
+                match struc {
+                    Symbol::Variable(st) | Symbol::Constant(st) => match &st.data_type {
+                        DataType::Struct(s, m) => {
+                            for v in m.iter().rev() {
+                                if v.name == e.identifier() {
+                                    return Some(v.data_type.clone());
+                                }
+                            }
+                            return None;
+                        }
+                        _ => return None,
+                    },
+                    _ => return None,
+                }
+            }
+            _ => return None,
+        };
+    }
+
     fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) -> Option<DataType> {
         let expr_data_type = self.visit_expression(&expr.expr)?;
 
@@ -468,7 +497,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                 }
             }
             super::ASTUnaryOperatorKind::LogicNot => {
-                if expr_data_type.is_bool() {
+                if !expr_data_type.is_bool() {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Unary operator '!' can not be used on type {}",
@@ -555,9 +584,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
                 return None;
             }
-            _ => {}
         };
-        return Some(right_type);
     }
 
     fn visit_parenthesised_expression(

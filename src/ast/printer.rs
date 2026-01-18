@@ -235,7 +235,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
 
     fn visit_struct_initializer_expression(
         &mut self,
-        struct_initializer: &super::ASTStructInitializerExpression,
+        _struct_initializer: &super::ASTStructInitializerExpression,
     ) {
     }
 
@@ -287,6 +287,8 @@ impl ASTVisitor<()> for ASTTreePrinter {
             &Self::TEXT_COLOR,
         );
     }
+
+    fn visit_member_access_expression(&mut self, _expr: &super::ASTMemberAccessExpression) {}
 
     fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) {
         self.print(
@@ -699,6 +701,8 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         ));
     }
 
+    fn visit_member_access_expression(&mut self, _expr: &super::ASTMemberAccessExpression) {}
+
     fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) {
         self.print(&format!(
             "{}{}",
@@ -750,7 +754,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         ));
     }
 
-    fn visit_error(&mut self, span: &super::lexer::TextSpan) -> () {}
+    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> () {}
     fn visit_integer(&mut self, integer: &i64) {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), integer));
     }

@@ -1,5 +1,8 @@
 use crate::ast::lexer::{Lexer, Token, TokenKind};
-use crate::ast::{ASTExpression, ASTStatement, StructMemberDeclaration, StructMemberInitializer};
+use crate::ast::{
+    ASTExpression, ASTExpressionKind, ASTStatement, StructMemberDeclaration,
+    StructMemberInitializer,
+};
 use crate::diagnostics::DiagnosticsColletion;
 use crate::diagnostics::DiagnosticsColletionCell;
 use std::{
@@ -475,6 +478,16 @@ impl Parser {
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
+                } else if self.current_token().kind == TokenKind::Dot {
+                    self.consume();
+                    let member: ASTExpression = self.parse_expression()?;
+                    match member.kind {
+                        ASTExpressionKind::Variable(_) => {
+                            return Some(ASTExpression::member_access(token.clone(), member));
+                        }
+                        ASTExpressionKind::MemberAccess(_) => return None,
+                        _ => return None,
+                    };
                 } else if token.name() == "false" {
                     Some(ASTExpression::boolean(false))
                 } else if token.name() == "true" {

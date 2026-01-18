@@ -148,6 +148,8 @@ impl ASTVisitor<()> for TypeChecker {
         }
     }
 
+    fn visit_member_access_expression(&mut self, _expr: &super::ASTMemberAccessExpression) {}
+
     fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) {
         self.visit_expression(&expr.expr);
     }
