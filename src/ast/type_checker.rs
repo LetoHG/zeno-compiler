@@ -1,3 +1,4 @@
+use crate::ast::symbol_table::DataType;
 use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
@@ -5,86 +6,6 @@ use crate::ast::symbol_table::VariableInfo;
 use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsColletionCell};
 
 use super::{ASTStatementKind, ASTVisitor};
-
-#[derive(Debug, PartialEq, Clone)]
-enum DataType {
-    Void,
-    Int,
-    Float,
-    Bool,
-    UserDefined(String),
-}
-
-impl DataType {
-    fn from_token(token: &super::lexer::Token) -> Self {
-        Self::from_string(&token.span.literal)
-    }
-
-    fn from_string(type_name: &String) -> Self {
-        match type_name.as_str() {
-            "void" => Self::Void,
-            "i8" => Self::Int,
-            "i16" => Self::Int,
-            "i32" => Self::Int,
-            "i64" => Self::Int,
-            "u8" => Self::Int,
-            "u16" => Self::Int,
-            "u32" => Self::Int,
-            "u64" => Self::Int,
-            "f32" => Self::Float,
-            "f64" => Self::Float,
-            "bool" => Self::Bool,
-            _ => Self::UserDefined(type_name.clone()),
-        }
-    }
-    fn to_string(&self) -> String {
-        match self {
-            Self::Void => "void".to_string(),
-            Self::Int => "i32".to_string(),
-            Self::Float => "f32".to_string(),
-            Self::Bool => "bool".to_string(),
-            Self::UserDefined(name) => name.clone(),
-        }
-    }
-    fn get_common_type(type1: &Self, type2: &Self) -> Option<Self> {
-        match (type1, type2) {
-            (Self::Int, Self::Bool) => Some(Self::Int),
-            (Self::Bool, Self::Int) => Some(Self::Int),
-            (Self::Bool, Self::Float) => Some(Self::Float),
-            (Self::Float, Self::Bool) => Some(Self::Float),
-            (Self::Int, Self::Float) => Some(Self::Float),
-            (Self::Float, Self::Int) => Some(Self::Float),
-            (Self::Float, Self::UserDefined(_)) => None,
-            (Self::Int, Self::UserDefined(_)) => None,
-            (Self::Bool, Self::UserDefined(_)) => None,
-            (Self::UserDefined(_), Self::Int) => None,
-            (Self::UserDefined(_), Self::Float) => None,
-            (Self::UserDefined(_), Self::Bool) => None,
-            (Self::UserDefined(_), Self::UserDefined(_)) => None,
-            (Self::Int, Self::Int) => Some(Self::Int),
-            (Self::Float, Self::Float) => Some(Self::Float),
-            (Self::Bool, Self::Bool) => Some(Self::Bool),
-            (Self::Void, Self::Void) => Some(Self::Void),
-            _ => todo!(),
-        }
-    }
-
-    fn is_convertable_to(&self, wanted_type: Self) -> bool {
-        if *self == wanted_type {
-            return true;
-        }
-        match (self, wanted_type) {
-            (Self::Int, Self::Int) => true,
-            (Self::Int, Self::Float) => true,
-            (Self::Int, Self::Bool) => true,
-            (Self::Float, Self::Int) => true,
-            (Self::Float, Self::Bool) => true,
-            (Self::Bool, Self::Int) => true,
-            (Self::Bool, Self::Float) => true,
-            _ => false,
-        }
-    }
-}
 
 pub struct TypeChecker<'a> {
     symbol_table: &'a mut SymbolTable,
@@ -137,12 +58,11 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         statement: &super::ASTReturnStatement,
     ) -> Option<DataType> {
         let actual = self.visit_expression(&statement.expr)?;
-        let expeceted =
-            DataType::from_string(&self.symbol_table.function_stack.last().unwrap().return_type);
-        if actual != expeceted {
+        let expeceted = &self.symbol_table.function_stack.last().unwrap().return_type;
+        if actual != *expeceted {
             self.diagnostics.borrow_mut().report_error(
                 format!(
-                    "Expected return type of type {:?} but found {:?}",
+                    "Expected return type of type {} but found {}",
                     expeceted, actual
                 ),
                 super::lexer::TextSpan {
@@ -188,14 +108,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
-            data_type: statement.data_type.name(),
+            data_type: DataType::from_token(&statement.data_type),
         }));
         let initialization_expr_type: DataType = self.visit_expression(&statement.initializer)?;
         let actual = DataType::from_token(&statement.data_type);
         if initialization_expr_type.is_convertable_to(actual.clone()) {
             // self.diagnostics.borrow_mut().report_warning(
             //     format!(
-            //         "Implicit conversion from {:?} to {:?}",
+            //         "Implicit conversion from {} to {}",
             //         initialization_expr_type, actual,
             //     ),
             //     statement.identifier.span.clone(),
@@ -203,7 +123,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         } else {
             self.diagnostics.borrow_mut().report_error(
                 format!(
-                    "Initializing an {:?} from a {:?}",
+                    "Initializing an {} from a {}",
                     actual, initialization_expr_type
                 ),
                 statement.identifier.span.clone(),
@@ -228,14 +148,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
-            data_type: statement.data_type.name(),
+            data_type: DataType::from_token(&statement.data_type),
         }));
         let initialization_expr_type = self.visit_expression(&statement.initializer)?;
         let actual = DataType::from_token(&statement.data_type);
         if initialization_expr_type.is_convertable_to(actual.clone()) {
             // self.diagnostics.borrow_mut().report_warning(
             //     format!(
-            //         "Implicit conversion from {:?} to {:?}",
+            //         "Implicit conversion from {} to {}",
             //         initialization_expr_type, actual,
             //     ),
             //     statement.identifier.span.clone(),
@@ -243,7 +163,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         } else {
             self.diagnostics.borrow_mut().report_error(
                 format!(
-                    "Initializing an {:?} from a {:?}",
+                    "Initializing an {} from a {}",
                     actual, initialization_expr_type
                 ),
                 statement.identifier.span.clone(),
@@ -271,7 +191,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
                         if x != y {
                             println!(
-                                "Return Type differs from previous return paths: {:?} {:?}",
+                                "Return Type differs from previous return paths: {} {}",
                                 x, y
                             );
                         }
@@ -338,8 +258,8 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Variable(VariableInfo {
             name: statement.loop_variable.name(),
-            data_type: range_start_type.to_string(), // TODO(letohg): [2025-07-19] evaluate the
-                                                     // datatype of statement.range (it has to be an integer)
+            data_type: range_start_type, // TODO(letohg): [2025-07-19] evaluate the
+                                         // datatype of statement.range (it has to be an integer)
         }));
         let _return_type = self.visit_statement(&statement.body);
         self.exit_scope();
@@ -376,12 +296,12 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             // argument_types.push(arg.identifier.span.literal.clone());
             self.declare_local_identifier(Symbol::Variable(VariableInfo {
                 name: arg.identifier.name(),
-                data_type: arg.data_type.name(),
+                data_type: DataType::from_token(&arg.data_type),
             }));
         }
         self.symbol_table.function_stack.push(FunctionContext {
             name: function.identifier.name(),
-            return_type: function.return_type.name(),
+            return_type: DataType::from_token(&function.return_type),
         });
         self.visit_statement(&function.body);
         self.symbol_table.function_stack.pop();
@@ -403,13 +323,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     );
                     return None;
                 }
-                Symbol::Variable(v) => {
-                    let expected = DataType::from_string(&v.data_type);
-
+                Symbol::Variable(VariableInfo {
+                    name: _,
+                    data_type: expected,
+                }) => {
                     if expr_data_type.is_convertable_to(expected.clone()) {
                         // self.diagnostics.borrow_mut().report_warning(
                         //     format!(
-                        //         "Implicit conversion from {:?} to {:?}",
+                        //         "Implicit conversion from {} to {}",
                         //         expr_data_type, expected,
                         //     ),
                         //     expr.identifier.span.clone(),
@@ -417,7 +338,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     } else {
                         self.diagnostics.borrow_mut().report_error(
                             format!(
-                                "Cannot assign {:?} to identifier '{}' of type {:?}",
+                                "Cannot assign {} to identifier '{}' of type {}",
                                 expr_data_type,
                                 identifier.name(),
                                 expected,
@@ -458,7 +379,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         } else {
             let expected_number_of_arguments = match self.lookup(expr.identifier()).unwrap() {
                 Symbol::Function(func) => {
-                    func_return_type = DataType::from_string(&func.return_type);
+                    func_return_type = func.return_type.clone();
                     func.parameters.len()
                 }
                 _ => {
@@ -497,7 +418,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     );
                 }
                 Symbol::Variable(v) | Symbol::Constant(v) => {
-                    return Some(DataType::from_string(&v.data_type));
+                    return Some(v.data_type.clone());
                 }
             },
             _ => {
@@ -516,10 +437,10 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         match expr.operator.kind {
             super::ASTUnaryOperatorKind::Minus => {
-                if expr_data_type != DataType::Int && expr_data_type != DataType::Float {
+                if expr_data_type.is_integer() && expr_data_type.is_floating() {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
-                            "Unary operator '-' can not be used on type {:?}",
+                            "Unary operator '-' can not be used on type {}",
                             expr_data_type
                         ),
                         expr.operator.token.span.clone(),
@@ -528,10 +449,10 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                 }
             }
             super::ASTUnaryOperatorKind::BitwiseNOT => {
-                if expr_data_type != DataType::Int {
+                if expr_data_type.is_integer() {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
-                            "Unary operator '^' can not be used on type {:?}",
+                            "Unary operator '^' can not be used on type {}",
                             expr_data_type
                         ),
                         expr.operator.token.span.clone(),
@@ -543,7 +464,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                 if expr_data_type != DataType::Bool {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
-                            "Unary operator '!' can not be used on type {:?}",
+                            "Unary operator '!' can not be used on type {}",
                             expr_data_type
                         ),
                         expr.operator.token.span.clone(),
@@ -563,7 +484,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         if common_data_type.is_none() {
             self.diagnostics.borrow_mut().report_error(
                 format!(
-                    "No common datatype between {:?} and {:?}",
+                    "No common datatype between {} and {}",
                     left_type, right_type
                 ),
                 expr.operator.token.span.clone(),
@@ -590,7 +511,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
                 self.diagnostics.borrow_mut().report_error(
                     format!(
-                        "Both sides need to be convertable it to bool: {:?} and {:?} ",
+                        "Both sides need to be convertable it to bool: {} and {}",
                         left_type, right_type
                     ),
                     expr.operator.token.span.clone(),
@@ -602,12 +523,16 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             | ASTBinaryOperatorKind::BitwiseAND
             | ASTBinaryOperatorKind::BitwiseXOR => {
                 match common_data_type {
-                    Some(DataType::Int) => return Some(DataType::Int),
+                    Some(ty) => {
+                        if ty.is_integer() {
+                            return Some(ty);
+                        }
+                    }
                     _ => {}
                 };
                 self.diagnostics.borrow_mut().report_error(
                     format!(
-                        "Both sides need to be of type int: {:?} and {:?} ",
+                        "Both sides need to be of type int: {} and {}",
                         left_type, right_type
                     ),
                     expr.operator.token.span.clone(),
@@ -633,12 +558,12 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         None
     }
     fn visit_integer(&mut self, _integer: &i64) -> Option<DataType> {
-        Some(DataType::Int)
+        Some(DataType::I32)
     }
     fn visit_boolean(&mut self, _boolean: bool) -> Option<DataType> {
         Some(DataType::Bool)
     }
     fn visit_float(&mut self, _float: &f64) -> Option<DataType> {
-        Some(DataType::Float)
+        Some(DataType::F32)
     }
 }

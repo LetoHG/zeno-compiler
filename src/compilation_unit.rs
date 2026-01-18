@@ -1,6 +1,7 @@
 use crate::ast::symbol_table;
 use crate::ast::symbol_table_builder;
 use crate::ast::symbol_table_builder::SymbolTableBuilder;
+use crate::ast::type_checker;
 use crate::{ast, diagnostics};
 use ast::lexer::Token;
 use ast::printer::ASTHiglightPrinter;
@@ -46,12 +47,9 @@ impl CompilationUnit {
         symbol_table_builder.build(&ast);
         Self::check_diagstics("SymbolTableBuilder", &source_text, &diagnostics_colletion)?;
 
-        let mut symbol_table = symbol_table::SymbolTable::new();
-        let mut symbol_table_builder = symbol_table_builder::SymbolTableBuilder::new(
-            Rc::clone(&diagnostics_colletion),
-            &mut symbol_table,
-        );
-        symbol_table_builder.build(&ast);
+        let mut type_checker =
+            type_checker::TypeChecker::new(Rc::clone(&diagnostics_colletion), &mut symbol_table);
+        type_checker.analyze(&ast);
         Self::check_diagstics("TypeChecker", &source_text, &diagnostics_colletion)?;
 
         Ok(Self {

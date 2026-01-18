@@ -1,5 +1,5 @@
 use crate::{
-    ast::symbol_table::{FunctionInfo, Symbol, SymbolTable, VariableInfo},
+    ast::symbol_table::{DataType, FunctionInfo, Symbol, SymbolTable, VariableInfo},
     diagnostics::DiagnosticsColletionCell,
 };
 
@@ -65,14 +65,14 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_let_statement(&mut self, statement: &super::ASTLetStatement) {
         self.declare_global_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
-            data_type: statement.data_type.name(),
+            data_type: DataType::from_token(&statement.data_type),
         }));
     }
 
     fn visit_var_statement(&mut self, statement: &super::ASTVarStatement) {
         self.declare_global_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
-            data_type: statement.data_type.name(),
+            data_type: DataType::from_token(&statement.data_type),
         }));
     }
 
@@ -109,16 +109,16 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
-        let mut argument_types: Vec<String> = Vec::new();
+        let mut argument_types: Vec<DataType> = Vec::new();
         // add arguments to scope of local variable call
         for arg in function.arguments.iter() {
             // argument_types.push(arg.identifier.span.literal.clone());
-            argument_types.push(arg.data_type.name());
+            argument_types.push(DataType::from_token(&arg.data_type));
         }
         self.declare_global_identifier(Symbol::Function(FunctionInfo {
             name: function.identifier.name(),
-            parameters: argument_types.clone(),
-            return_type: function.return_type.span.literal.clone(),
+            parameters: argument_types,
+            return_type: DataType::from_token(&function.return_type),
         }));
     }
 

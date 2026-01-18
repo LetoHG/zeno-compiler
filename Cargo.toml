@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+fmt = "0.1.0"
 nerd-font-symbols = "0.2"
 termion = "4.0.3"
