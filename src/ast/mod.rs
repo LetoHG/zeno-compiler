@@ -126,6 +126,7 @@ enum ASTStatementKind {
     Let(ASTLetStatement),
     Var(ASTVarStatement),
     StructDecl(ASTStructStatement),
+    StructCtor(ASTStructInitializerStatement),
     Return(ASTReturnStatement),
     Compound(ASTCompoundStatement),
     FuncDecl(ASTFunctionStatement),
@@ -158,6 +159,18 @@ pub struct StructMemberDeclaration {
 pub struct ASTStructStatement {
     identifier: Token,
     members: Vec<StructMemberDeclaration>,
+}
+
+#[derive(Clone)]
+pub struct StructMemberInitializer {
+    identifier: Token,
+    initializer: ASTExpression,
+}
+
+#[derive(Clone)]
+pub struct ASTStructInitializerStatement {
+    identifier: Token,
+    members_initializers: Vec<StructMemberInitializer>,
 }
 
 #[derive(Clone)]
@@ -328,6 +341,18 @@ impl ASTStatement {
             kind: ASTStatementKind::StructDecl(ASTStructStatement {
                 identifier,
                 members,
+            }),
+        }
+    }
+
+    fn struct_initializer(
+        identifier: Token,
+        members_initializers: Vec<StructMemberInitializer>,
+    ) -> Self {
+        Self {
+            kind: ASTStatementKind::StructCtor(ASTStructInitializerStatement {
+                identifier,
+                members_initializers,
             }),
         }
     }
