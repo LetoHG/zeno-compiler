@@ -184,6 +184,12 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
+    fn visit_struct_initializer_expression(
+        &mut self,
+        struct_initializer: &super::ASTStructInitializerExpression,
+    ) -> Option<()> {
+        None
+    }
     fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) -> Option<()> {
         self.visit_expression(&expr.expr);
         for scope in self.scopes.iter_mut().rev() {

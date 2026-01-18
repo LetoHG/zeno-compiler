@@ -282,47 +282,6 @@ impl Parser {
         Some(ASTStatement::struct_type(identifier, members))
     }
 
-    fn parse_struct_initializer_statement(&mut self) -> Option<ASTStatement> {
-        let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
-        self.consume_expected(TokenKind::LeftBrace)?;
-
-        let mut members: Vec<StructMemberInitializer> = Vec::new();
-        while self.current_token().kind != TokenKind::RightBrace
-            && self.current_token().kind != TokenKind::Eof
-        {
-            if self.current_token().kind == TokenKind::Dot {
-                self.consume();
-                let identifier = self.consume().clone();
-                self.consume_expected(TokenKind::Colon)?;
-                // TODO(letohg): [2026-01-18] add member default initializer
-                let initializer = self.parse_expression()?;
-                members.push(StructMemberInitializer {
-                    identifier,
-                    initializer,
-                });
-            } else {
-                self.diagnostics_colletion
-                    .borrow_mut()
-                    .report_unexpected_token(&TokenKind::Identifier, self.current_token());
-                return None;
-            }
-
-            if self.current_token().kind == TokenKind::Comma
-                && self.peek(1).kind == TokenKind::RightBrace
-            {
-                self.consume(); // Consume trailing comma if present
-                break;
-            } else {
-                self.consume_expected(TokenKind::Comma)?;
-            }
-        }
-
-        self.consume_expected(TokenKind::RightBrace)?;
-        self.consume_expected(TokenKind::SemiColon)?;
-
-        Some(ASTStatement::struct_initializer(identifier, members))
-    }
-
     fn consume_optional_else_statement(&mut self) -> Option<ASTElseStatement> {
         if self.current_token().kind != TokenKind::Else {
             return None;
@@ -398,26 +357,30 @@ impl Parser {
     }
 
     fn parse_assignment_expression(&mut self) -> Option<ASTExpression> {
-        if self.current_token().kind == TokenKind::Identifier {
-            if self.peek(1).kind == TokenKind::Equal {
-                let var = self.consume().clone();
-                self.consume_expected(TokenKind::Equal)?;
-                let assignment = self.parse_binary_expression(0)?;
-                return Some(ASTExpression::assignment(var, assignment));
-            }
-            if self.peek(1).kind == TokenKind::PlusEqual
-                || self.peek(1).kind == TokenKind::MinusEqual
-                || self.peek(1).kind == TokenKind::AstriskEqual
-                || self.peek(1).kind == TokenKind::SlashEqual
-            {
-                let var = self.consume().clone();
-                let op = self.consume_assignment_operator();
-                let assignment = self.parse_binary_expression(0)?;
-                return Some(ASTExpression::assignment(
-                    var.clone(),
-                    ASTExpression::binary(op, ASTExpression::identifier(var.clone()), assignment),
-                ));
-            }
+        if self.current_token().kind != TokenKind::Identifier {
+            return self.parse_binary_expression(0);
+        }
+        if self.peek(1).kind == TokenKind::LeftBrace {
+            return self.parse_struct_initializer_expression();
+        }
+        if self.peek(1).kind == TokenKind::Equal {
+            let var = self.consume().clone();
+            self.consume_expected(TokenKind::Equal)?;
+            let assignment = self.parse_binary_expression(0)?;
+            return Some(ASTExpression::assignment(var, assignment));
+        }
+        if self.peek(1).kind == TokenKind::PlusEqual
+            || self.peek(1).kind == TokenKind::MinusEqual
+            || self.peek(1).kind == TokenKind::AstriskEqual
+            || self.peek(1).kind == TokenKind::SlashEqual
+        {
+            let var = self.consume().clone();
+            let op = self.consume_assignment_operator();
+            let assignment = self.parse_binary_expression(0)?;
+            return Some(ASTExpression::assignment(
+                var.clone(),
+                ASTExpression::binary(op, ASTExpression::identifier(var.clone()), assignment),
+            ));
         }
         self.parse_binary_expression(0)
     }
@@ -465,6 +428,42 @@ impl Parser {
         let arguments = self.parse_arguments_list()?;
         self.consume_expected(TokenKind::RightParen)?;
         Some(ASTExpression::function_call(identifier.clone(), arguments))
+    }
+
+    fn parse_struct_initializer_expression(&mut self) -> Option<ASTExpression> {
+        let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
+        self.consume_expected(TokenKind::LeftBrace)?;
+
+        let mut members: Vec<StructMemberInitializer> = Vec::new();
+        while self.current_token().kind != TokenKind::RightBrace
+            && self.current_token().kind != TokenKind::Eof
+        {
+            self.consume_expected(TokenKind::Dot);
+            if self.current_token().kind == TokenKind::Identifier {
+                let identifier = self.consume().clone();
+                self.consume_expected(TokenKind::Colon)?;
+                // TODO(letohg): [2026-01-18] add member default initializer
+                let initializer = self.parse_expression()?;
+                members.push(StructMemberInitializer {
+                    identifier,
+                    initializer,
+                });
+            } else {
+                self.diagnostics_colletion
+                    .borrow_mut()
+                    .report_unexpected_token(&TokenKind::Identifier, self.current_token());
+                return None;
+            }
+
+            if self.current_token().kind == TokenKind::RightBrace {
+                break;
+            }
+            self.consume_expected(TokenKind::Comma);
+        }
+
+        self.consume_expected(TokenKind::RightBrace)?;
+
+        Some(ASTExpression::struct_initializer(identifier, members))
     }
 
     fn parse_primary_expression(&mut self) -> Option<ASTExpression> {

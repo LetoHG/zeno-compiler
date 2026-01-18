@@ -62,6 +62,9 @@ pub trait ASTVisitor<T> {
             ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
             ASTExpressionKind::Variable(expr) => self.visit_variable_expression(expr),
             ASTExpressionKind::StringLiteral(_) => todo!(),
+            ASTExpressionKind::StructCtor(statement) => {
+                self.visit_struct_initializer_expression(statement)
+            }
             ASTExpressionKind::Unary(expr) => self.visit_unary_expression(expr),
             ASTExpressionKind::Binary(expr) => self.visit_binary_expression(expr),
             ASTExpressionKind::Parenthesized(expr) => self.visit_parenthesised_expression(expr),
@@ -101,6 +104,11 @@ pub trait ASTVisitor<T> {
 
     fn visit_struct_statement(&mut self, struct_def: &ASTStructStatement) -> T;
 
+    fn visit_struct_initializer_expression(
+        &mut self,
+        struct_initializer: &ASTStructInitializerExpression,
+    ) -> T;
+
     fn visit_expression(&mut self, expr: &ASTExpression) -> T {
         return self.do_visit_expression(expr);
     }
@@ -126,7 +134,6 @@ enum ASTStatementKind {
     Let(ASTLetStatement),
     Var(ASTVarStatement),
     StructDecl(ASTStructStatement),
-    StructCtor(ASTStructInitializerStatement),
     Return(ASTReturnStatement),
     Compound(ASTCompoundStatement),
     FuncDecl(ASTFunctionStatement),
@@ -159,18 +166,6 @@ pub struct StructMemberDeclaration {
 pub struct ASTStructStatement {
     identifier: Token,
     members: Vec<StructMemberDeclaration>,
-}
-
-#[derive(Clone)]
-pub struct StructMemberInitializer {
-    identifier: Token,
-    initializer: ASTExpression,
-}
-
-#[derive(Clone)]
-pub struct ASTStructInitializerStatement {
-    identifier: Token,
-    members_initializers: Vec<StructMemberInitializer>,
 }
 
 #[derive(Clone)]
@@ -344,18 +339,6 @@ impl ASTStatement {
             }),
         }
     }
-
-    fn struct_initializer(
-        identifier: Token,
-        members_initializers: Vec<StructMemberInitializer>,
-    ) -> Self {
-        Self {
-            kind: ASTStatementKind::StructCtor(ASTStructInitializerStatement {
-                identifier,
-                members_initializers,
-            }),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -364,6 +347,7 @@ enum ASTExpressionKind {
     BooleanLiteral(bool),
     FloatingLiteral(f64),
     StringLiteral(String),
+    StructCtor(ASTStructInitializerExpression),
     Unary(ASTUnaryExpression),
     Binary(ASTBinaryExpression),
     Parenthesized(ASTParenthesizedExpression),
@@ -452,6 +436,17 @@ impl ASTExpression {
             kind: ASTExpressionKind::FunctionCall(ASTFunctionCallExpression {
                 identifier,
                 arguments,
+            }),
+        }
+    }
+    fn struct_initializer(
+        identifier: Token,
+        members_initializers: Vec<StructMemberInitializer>,
+    ) -> Self {
+        Self {
+            kind: ASTExpressionKind::StructCtor(ASTStructInitializerExpression {
+                identifier,
+                members_initializers,
             }),
         }
     }
@@ -561,6 +556,18 @@ impl ASTFunctionCallExpression {
     pub fn identifier(&self) -> &str {
         &self.identifier.span.literal
     }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct StructMemberInitializer {
+    identifier: Token,
+    initializer: ASTExpression,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTStructInitializerExpression {
+    identifier: Token,
+    members_initializers: Vec<StructMemberInitializer>,
 }
 
 #[cfg(test)]
@@ -708,6 +715,11 @@ mod test {
 
         fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
 
+        fn visit_struct_initializer_expression(
+            &mut self,
+            struct_initializer: &super::ASTStructInitializerExpression,
+        ) {
+        }
         fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {
             self.actual
                 .push(TestASTNode::Assign(expr.identifier.span.literal.clone()));

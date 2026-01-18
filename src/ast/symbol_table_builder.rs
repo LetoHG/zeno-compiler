@@ -123,6 +123,11 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
+    fn visit_struct_initializer_expression(
+        &mut self,
+        struct_initializer: &super::ASTStructInitializerExpression,
+    ) {
+    }
 
     fn visit_assignment_expression(&mut self, _expr: &super::ASTAssignmentExpression) {}
     fn visit_function_call_expression(&mut self, _expr: &super::ASTFunctionCallExpression) {}

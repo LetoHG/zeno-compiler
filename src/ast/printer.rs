@@ -233,6 +233,12 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.decrease_indentation();
     }
 
+    fn visit_struct_initializer_expression(
+        &mut self,
+        struct_initializer: &super::ASTStructInitializerExpression,
+    ) {
+    }
+
     fn visit_expression(&mut self, expr: &super::ASTExpression) {
         // self.print(
         //     &format!("{}  Expression:", Self::EXPR_ICON),
@@ -621,6 +627,34 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.decrease_indentation();
         self.print(&format!("{};", '}'));
         self.add_newline();
+    }
+
+    fn visit_struct_initializer_expression(
+        &mut self,
+        struct_initializer: &super::ASTStructInitializerExpression,
+    ) {
+        self.print(&format!(
+            "{}{}{}{}",
+            Fg(Self::FUNC_NAME_COLOR),
+            struct_initializer.identifier.span.literal,
+            Fg(Self::TEXT_COLOR),
+            '{'
+        ));
+        for (i, member_initializer) in struct_initializer.members_initializers.iter().enumerate() {
+            if i != 0 {
+                self.print(&format!("{},", Fg(Self::TEXT_COLOR)));
+                self.add_whitespace();
+            }
+
+            self.print(&format!(
+                ".{}{}: ",
+                Fg(Self::TEXT_COLOR),
+                member_initializer.identifier.name()
+            ));
+            self.visit_expression(&member_initializer.initializer);
+        }
+
+        self.print(&format!("{}", '}'));
     }
 
     fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {

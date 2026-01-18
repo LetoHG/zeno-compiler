@@ -47,6 +47,7 @@ func main() -> i32 {
     let start: i32 = 0;
     let end: i32 = 10;
 
+    let point : Point = Point{.x: 5, .y: 10};
     let sum: i32 = sum_range(start, end);
     // println("Sum:");
     println(sum);

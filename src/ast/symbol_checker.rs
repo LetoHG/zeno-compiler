@@ -109,6 +109,11 @@ impl ASTVisitor<()> for TypeChecker {
 
     fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
 
+    fn visit_struct_initializer_statement(
+        &mut self,
+        struct_initializer: &super::ASTStructInitializerStatement,
+    ) {
+    }
     fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {}
 
     fn visit_function_call_expression(&mut self, expr: &super::ASTFunctionCallExpression) {
