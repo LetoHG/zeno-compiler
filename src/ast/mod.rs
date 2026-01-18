@@ -45,6 +45,7 @@ pub trait ASTVisitor<T> {
             ASTStatementKind::Expr(expr) => self.visit_expression(expr),
             ASTStatementKind::Return(statement) => self.visit_return_statement(statement),
             ASTStatementKind::FuncDecl(statement) => self.visit_function_statement(statement),
+            ASTStatementKind::StructDecl(statement) => self.visit_struct_statement(statement),
             ASTStatementKind::Let(statement) => self.visit_let_statement(statement),
             ASTStatementKind::Var(statement) => self.visit_var_statement(statement),
             ASTStatementKind::Compound(statement) => self.visit_compound_statement(statement),
@@ -98,6 +99,8 @@ pub trait ASTVisitor<T> {
     //     None
     // }
 
+    fn visit_struct_statement(&mut self, struct_def: &ASTStructStatement) -> T;
+
     fn visit_expression(&mut self, expr: &ASTExpression) -> T {
         return self.do_visit_expression(expr);
     }
@@ -122,6 +125,7 @@ enum ASTStatementKind {
     Expr(ASTExpression),
     Let(ASTLetStatement),
     Var(ASTVarStatement),
+    StructDecl(ASTStructStatement),
     Return(ASTReturnStatement),
     Compound(ASTCompoundStatement),
     FuncDecl(ASTFunctionStatement),
@@ -142,6 +146,18 @@ pub struct ASTVarStatement {
     identifier: Token,
     data_type: Token,
     initializer: ASTExpression,
+}
+
+#[derive(Clone, Debug)]
+pub struct StructMemberDeclaration {
+    identifier: Token,
+    data_type: Token,
+}
+
+#[derive(Clone, Debug)]
+pub struct ASTStructStatement {
+    identifier: Token,
+    members: Vec<StructMemberDeclaration>,
 }
 
 #[derive(Clone)]
@@ -303,6 +319,15 @@ impl ASTStatement {
                 arguments,
                 body: Box::new(body),
                 return_type,
+            }),
+        }
+    }
+
+    fn struct_type(identifier: Token, members: Vec<StructMemberDeclaration>) -> Self {
+        Self {
+            kind: ASTStatementKind::StructDecl(ASTStructStatement {
+                identifier,
+                members,
             }),
         }
     }
@@ -655,6 +680,8 @@ mod test {
                 self.visit_compound_statement(statement);
             }
         }
+
+        fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
 
         fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {
             self.actual

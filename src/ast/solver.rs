@@ -180,6 +180,10 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
+    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) -> Option<()> {
+        None
+    }
+
     fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) -> Option<()> {
         self.visit_expression(&expr.expr);
         for scope in self.scopes.iter_mut().rev() {

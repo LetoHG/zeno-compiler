@@ -107,6 +107,8 @@ impl ASTVisitor<()> for TypeChecker {
         self.leave_scope();
     }
 
+    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {}
+
     fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {}
 
     fn visit_function_call_expression(&mut self, expr: &super::ASTFunctionCallExpression) {

@@ -1,5 +1,5 @@
 use crate::ast::lexer::{Lexer, Token, TokenKind};
-use crate::ast::{ASTExpression, ASTStatement};
+use crate::ast::{ASTExpression, ASTStatement, StructMemberDeclaration};
 use crate::diagnostics::DiagnosticsColletion;
 use crate::diagnostics::DiagnosticsColletionCell;
 use std::{
@@ -92,6 +92,7 @@ impl Parser {
             TokenKind::Var => self.parse_var_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Func => self.parse_function_statement(),
+            TokenKind::Struct => self.parse_struct_statement(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::While => self.parse_while_loop_statement(),
             TokenKind::For => self.parse_for_loop_statement(),
@@ -246,6 +247,39 @@ impl Parser {
             body,
             return_type,
         ))
+    }
+
+    fn parse_struct_statement(&mut self) -> Option<ASTStatement> {
+        self.consume_expected(TokenKind::Struct)?;
+        let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
+        self.consume_expected(TokenKind::LeftBrace)?;
+
+        let mut members: Vec<StructMemberDeclaration> = Vec::new();
+        while self.current_token().kind != TokenKind::RightBrace
+            && self.current_token().kind != TokenKind::Eof
+        {
+            if self.current_token().kind == TokenKind::Identifier {
+                let identifier = self.consume().clone();
+                self.consume_expected(TokenKind::Colon)?;
+                // TODO(letohg): [2026-01-18] add member default initializer
+                members.push(StructMemberDeclaration {
+                    identifier,
+                    data_type: self.consume().clone(),
+                });
+            } else {
+                self.diagnostics_colletion
+                    .borrow_mut()
+                    .report_unexpected_token(&TokenKind::Identifier, self.current_token());
+                return None;
+            }
+
+            self.consume_expected(TokenKind::Comma)?;
+        }
+
+        self.consume_expected(TokenKind::RightBrace)?;
+        self.consume_expected(TokenKind::SemiColon)?;
+
+        Some(ASTStatement::struct_type(identifier, members))
     }
 
     fn consume_optional_else_statement(&mut self) -> Option<ASTElseStatement> {

@@ -309,6 +309,13 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         None
     }
 
+    fn visit_struct_statement(
+        &mut self,
+        struct_def: &super::ASTStructStatement,
+    ) -> Option<DataType> {
+        Some(DataType::from_token(&struct_def.identifier))
+    }
+
     fn visit_assignment_expression(
         &mut self,
         expr: &super::ASTAssignmentExpression,

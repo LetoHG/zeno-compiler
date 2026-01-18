@@ -1,3 +1,8 @@
+struct Point {
+    x: i32,
+    y: i32,
+};
+
 // Return the sum of integers in the range [start, end)
 func sum_range(start: i32, end: i32) -> i32 {
     var sum: i32 = 0;

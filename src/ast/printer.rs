@@ -206,6 +206,33 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.decrease_indentation();
     }
 
+    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {
+        self.print(
+            &format!(
+                "{}  Struct: {}{}",
+                Self::FUNC_STATEMENT_ICON,
+                color::Fg(Self::TEXT_COLOR),
+                &struct_def.identifier.span.literal
+            ),
+            &Self::TEXT_COLOR,
+        );
+
+        self.increase_indentation();
+        for member in struct_def.members.iter() {
+            self.print(
+                &format!(
+                    "{}  Member: {}{} ({})",
+                    Self::FUNC_STATEMENT_ICON,
+                    color::Fg(Self::TEXT_COLOR),
+                    &member.identifier.span.literal,
+                    &member.data_type.span.literal
+                ),
+                &Self::TEXT_COLOR,
+            );
+        }
+        self.decrease_indentation();
+    }
+
     fn visit_expression(&mut self, expr: &super::ASTExpression) {
         // self.print(
         //     &format!("{}  Expression:", Self::EXPR_ICON),
@@ -566,6 +593,33 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         if let super::ASTStatementKind::Compound(statement) = &function.body.kind {
             self.visit_compound_statement(statement);
         }
+        self.add_newline();
+    }
+
+    fn visit_struct_statement(&mut self, struct_def: &super::ASTStructStatement) {
+        self.print_with_indent(&format!(
+            "{}struct {}{}{} {}",
+            Fg(Self::FUNC_COLOR),
+            Fg(Self::FUNC_NAME_COLOR),
+            struct_def.identifier.span.literal,
+            Fg(Self::TEXT_COLOR),
+            '{'
+        ));
+        self.add_newline();
+        self.increase_indentation();
+        for member in struct_def.members.iter() {
+            self.print(&format!(
+                "{}{}: {}{},",
+                Fg(Self::TEXT_COLOR),
+                member.identifier.span.literal,
+                Fg(Self::TYPE_COLOR),
+                member.data_type.span.literal,
+            ));
+            self.add_newline();
+        }
+
+        self.decrease_indentation();
+        self.print(&format!("{};", '}'));
         self.add_newline();
     }
 
