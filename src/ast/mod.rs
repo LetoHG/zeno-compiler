@@ -5,8 +5,8 @@ pub mod lexer;
 pub mod parser;
 pub mod printer;
 pub mod solver;
-pub mod symbol_checker;
 pub mod symbol_table;
+pub mod symbol_table_builder;
 pub mod type_checker;
 
 pub struct Ast {
