@@ -4,7 +4,7 @@ use std::fmt;
 use crate::ast::lexer::{Token, TokenKind};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum DataType {
+pub enum BuiltinDataType {
     I8,
     I16,
     I32,
@@ -18,18 +18,12 @@ pub enum DataType {
     Bool,
     Char,
     Str,
-    Struct(String),
     Void,
 }
-impl fmt::Display for DataType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
 
-impl DataType {
-    pub fn from_token(token: &Token) -> Self {
-        match &token.kind {
+impl BuiltinDataType {
+    pub fn from_token(token: &Token) -> Option<Self> {
+        Some(match &token.kind {
             TokenKind::I8 => Self::I8,
             TokenKind::I16 => Self::I16,
             TokenKind::I32 => Self::I32,
@@ -43,29 +37,29 @@ impl DataType {
             TokenKind::Bool => Self::Bool,
             TokenKind::Char => Self::Char,
             TokenKind::Str => Self::Str,
-            TokenKind::Identifier => Self::Struct(token.span.literal.clone()),
             TokenKind::Void => Self::Void,
-            _ => todo!(),
-        }
-    }
-    fn sizeof(&self) -> Option<u32> {
-        Some(match self {
-            DataType::I8 => 1,
-            DataType::I16 => 2,
-            DataType::I32 => 4,
-            DataType::I64 => 8,
-            DataType::U8 => 1,
-            DataType::U16 => 2,
-            DataType::U32 => 4,
-            DataType::U64 => 8,
-            DataType::F32 => 4,
-            DataType::F64 => 8,
-            DataType::Bool => 1,
-            DataType::Char => 1,
-            DataType::Str | DataType::Struct(_) | DataType::Void => return None,
+            _ => return None,
         })
     }
-    fn get_bigger_type(type1: &Self, type2: &Self) -> DataType {
+
+    fn sizeof(&self) -> Option<u32> {
+        Some(match self {
+            Self::I8 => 1,
+            Self::I16 => 2,
+            Self::I32 => 4,
+            Self::I64 => 8,
+            Self::U8 => 1,
+            Self::U16 => 2,
+            Self::U32 => 4,
+            Self::U64 => 8,
+            Self::F32 => 4,
+            Self::F64 => 8,
+            Self::Bool => 1,
+            Self::Char => 1,
+            Self::Str | Self::Void => return None,
+        })
+    }
+    fn get_bigger_type(type1: &Self, type2: &Self) -> Self {
         if type1.sizeof() > type2.sizeof() {
             return type1.clone();
         }
@@ -126,7 +120,6 @@ impl DataType {
             Self::Bool => "bool",
             Self::Char => "char",
             Self::Str => "str",
-            Self::Struct(name) => name,
             Self::Void => "void",
         }
         .to_string()
@@ -153,6 +146,116 @@ impl DataType {
             return self.sizeof() <= wanted_type.sizeof();
         }
         false
+    }
+}
+
+impl fmt::Display for BuiltinDataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StructDataMember {
+    name: String, // TODO(letohg): [2026-01-18] create type id system
+    data_type: DataType,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum DataType {
+    Builtin(BuiltinDataType),
+    Struct(String, Vec<StructDataMember>),
+}
+
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+impl DataType {
+    pub fn from_token(token: &Token) -> Self {
+        match BuiltinDataType::from_token(token) {
+            None => match token.kind {
+                TokenKind::Identifier => Self::Struct(token.span.literal.clone(), vec![]),
+                _ => todo!(),
+            },
+            Some(t) => Self::Builtin(t),
+        }
+    }
+
+    fn sizeof(&self) -> Option<u32> {
+        match self {
+            Self::Builtin(t) => t.sizeof(),
+            Self::Struct(_, _) => None,
+        }
+    }
+    fn get_bigger_type(type1: &Self, type2: &Self) -> DataType {
+        if type1.sizeof() > type2.sizeof() {
+            return type1.clone();
+        }
+        return type2.clone();
+    }
+
+    fn is_builtin(&self) -> bool {
+        match self {
+            Self::Builtin(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_signed_integer(&self) -> bool {
+        match self {
+            Self::Builtin(t) => t.is_signed_integer(),
+            _ => false,
+        }
+    }
+    pub fn is_unsigned_integer(&self) -> bool {
+        match self {
+            Self::Builtin(t) => t.is_unsigned_integer(),
+            _ => false,
+        }
+    }
+    pub fn is_integer(&self) -> bool {
+        self.is_signed_integer() || self.is_unsigned_integer()
+    }
+
+    pub fn is_floating(&self) -> bool {
+        match self {
+            Self::Builtin(t) => t.is_floating(),
+            _ => false,
+        }
+    }
+
+    pub fn is_bool(&self) -> bool {
+        match self {
+            Self::Builtin(t) => t.is_bool(),
+            _ => false,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Builtin(t) => t.to_string(),
+            Self::Struct(name, _members) => name.to_string(),
+        }
+    }
+
+    pub fn get_common_type(type1: &Self, type2: &Self) -> Option<Self> {
+        match (type1, type2) {
+            (Self::Builtin(t1), Self::Builtin(t2)) => {
+                let builtin_type = BuiltinDataType::get_common_type(t1, t2)?;
+                Some(Self::Builtin(builtin_type))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn is_convertable_to(&self, wanted_type: Self) -> bool {
+        match (self, wanted_type) {
+            (Self::Builtin(t1), Self::Builtin(t2)) => t1.is_convertable_to(t2),
+            _ => false,
+        }
     }
 }
 
