@@ -209,15 +209,12 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_if_statement(&mut self, statement: &super::ASTIfStatement) -> Option<DataType> {
         let condition_type = self.visit_expression(&statement.condition)?;
-        match condition_type {
-            DataType::Bool => {}
-            _ => {
-                self.diagnostics.borrow_mut().report_error(
-                    format!("Condition must be of type Bool"),
-                    statement.keyword.span.clone(),
-                );
-            }
-        };
+        if !condition_type.is_bool() {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Condition must be of type Bool"),
+                statement.keyword.span.clone(),
+            );
+        }
 
         let then_return_type = self.visit_statement(&statement.then_branch);
 
@@ -272,15 +269,12 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         statement: &super::ASTWhileStatement,
     ) -> Option<DataType> {
         let condition_type = self.visit_expression(&statement.condition)?;
-        match condition_type {
-            DataType::Bool => {}
-            _ => {
-                self.diagnostics.borrow_mut().report_error(
-                    format!("Condition must be of type Bool"),
-                    statement.keyword.span.clone(),
-                );
-            }
-        };
+        if condition_type.is_bool() {
+            self.diagnostics.borrow_mut().report_error(
+                format!("Condition must be of type Bool"),
+                statement.keyword.span.clone(),
+            );
+        }
 
         self.visit_statement(&statement.body);
         None
@@ -382,7 +376,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         expr: &super::ASTFunctionCallExpression,
     ) -> Option<DataType> {
-        let mut func_return_type = DataType::Void;
+        let mut func_return_type = DataType::Builtin(super::symbol_table::BuiltinDataType::Void);
         if expr.identifier() == "println" {
         } else if self.lookup(&expr.identifier().to_string()).is_none() {
             self.diagnostics
@@ -474,7 +468,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                 }
             }
             super::ASTUnaryOperatorKind::LogicNot => {
-                if expr_data_type != DataType::Bool {
+                if expr_data_type.is_bool() {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Unary operator '!' can not be used on type {}",
@@ -514,12 +508,20 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             | ASTBinaryOperatorKind::GreaterThan
             | ASTBinaryOperatorKind::GreaterThanOrEqual
             | ASTBinaryOperatorKind::LessThan
-            | ASTBinaryOperatorKind::LessThanOrEqual => return Some(DataType::Bool),
+            | ASTBinaryOperatorKind::LessThanOrEqual => {
+                return Some(DataType::Builtin(
+                    super::symbol_table::BuiltinDataType::Bool,
+                ))
+            }
             ASTBinaryOperatorKind::LogicAND | ASTBinaryOperatorKind::LogicOR => {
-                if left_type.is_convertable_to(DataType::Bool)
-                    && right_type.is_convertable_to(DataType::Bool)
-                {
-                    return Some(DataType::Bool);
+                if left_type.is_convertable_to(DataType::Builtin(
+                    crate::ast::symbol_table::BuiltinDataType::Bool,
+                )) && right_type.is_convertable_to(DataType::Builtin(
+                    crate::ast::symbol_table::BuiltinDataType::Bool,
+                )) {
+                    return Some(DataType::Builtin(
+                        crate::ast::symbol_table::BuiltinDataType::Bool,
+                    ));
                 }
 
                 self.diagnostics.borrow_mut().report_error(
@@ -571,12 +573,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         None
     }
     fn visit_integer(&mut self, _integer: &i64) -> Option<DataType> {
-        Some(DataType::I32)
+        Some(DataType::Builtin(super::symbol_table::BuiltinDataType::I32))
     }
     fn visit_boolean(&mut self, _boolean: bool) -> Option<DataType> {
-        Some(DataType::Bool)
+        Some(DataType::Builtin(
+            super::symbol_table::BuiltinDataType::Bool,
+        ))
     }
     fn visit_float(&mut self, _float: &f64) -> Option<DataType> {
-        Some(DataType::F32)
+        Some(DataType::Builtin(super::symbol_table::BuiltinDataType::F32))
     }
 }
