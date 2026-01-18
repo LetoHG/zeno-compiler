@@ -1,9 +1,11 @@
 use crate::ast::symbol_table;
+use crate::ast::symbol_table_builder;
+use crate::ast::symbol_table_builder::SymbolTableBuilder;
+use crate::ast::type_checker;
 use crate::{ast, diagnostics};
 use ast::lexer::Token;
 use ast::printer::ASTHiglightPrinter;
 use ast::solver::ASTSolver;
-use ast::symbol_checker;
 use diagnostics::printer::DiagnosticsPrinter;
 use diagnostics::{DiagnosticsColletion, DiagnosticsColletionCell};
 use std::{cell::RefCell, rc::Rc};
@@ -35,30 +37,20 @@ impl CompilationUnit {
         let mut highlight_printer = ASTHiglightPrinter::new();
         ast.visit(&mut highlight_printer);
         highlight_printer.print_result();
-        {
-            let count_errors = diagnostics_colletion.borrow_mut().count_errors;
-            let count_warnings = diagnostics_colletion.borrow_mut().count_warnings;
-            println!(
-                "Syntax: {} Errors and {} Warnings",
-                count_errors, count_warnings
-            );
-        }
-        Self::check_diagstics(&source_text, &diagnostics_colletion)?;
+        Self::check_diagstics("Parser", &source_text, &diagnostics_colletion)?;
 
-        let mut symbol_table = symbol_table::SymbolTable::new(Rc::clone(&diagnostics_colletion));
-        symbol_table.build(&ast);
-        // let mut symbol_checker =
-        //     symbol_checker::SymbolChecker::new(Rc::clone(&diagnostics_colletion));
-        // ast.visit(&mut symbol_checker);
-        {
-            let count_errors = diagnostics_colletion.borrow_mut().count_errors;
-            let count_warnings = diagnostics_colletion.borrow_mut().count_warnings;
-            println!(
-                "Type Check: {} Errors and {} Warnings",
-                count_errors, count_warnings
-            );
-        }
-        Self::check_diagstics(&source_text, &diagnostics_colletion)?;
+        let mut symbol_table = symbol_table::SymbolTable::new();
+        let mut symbol_table_builder = symbol_table_builder::SymbolTableBuilder::new(
+            Rc::clone(&diagnostics_colletion),
+            &mut symbol_table,
+        );
+        symbol_table_builder.build(&ast);
+        Self::check_diagstics("SymbolTableBuilder", &source_text, &diagnostics_colletion)?;
+
+        let mut type_checker =
+            type_checker::TypeChecker::new(Rc::clone(&diagnostics_colletion), &mut symbol_table);
+        type_checker.analyze(&ast);
+        Self::check_diagstics("TypeChecker", &source_text, &diagnostics_colletion)?;
 
         Ok(Self {
             ast,
@@ -74,10 +66,18 @@ impl CompilationUnit {
     }
 
     fn check_diagstics(
+        stage_name: &str,
         source_text: &SourceText,
         diagnostics_colletion: &DiagnosticsColletionCell,
     ) -> Result<(), ()> {
         let diagnostics_messages = &diagnostics_colletion.borrow().diagnostics;
+        let count_errors = &diagnostics_colletion.borrow().count_errors;
+        let count_warnings = &diagnostics_colletion.borrow().count_warnings;
+        println!(
+            "{}: {} Errors and {} Warnings",
+            stage_name, count_errors, count_warnings
+        );
+
         if diagnostics_messages.len() > 0 {
             let diagnostics_printer = DiagnosticsPrinter::new(&source_text, &diagnostics_messages);
             diagnostics_printer.print();

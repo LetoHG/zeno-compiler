@@ -4,19 +4,15 @@ use crate::diagnostics::DiagnosticsColletionCell;
 
 use super::ASTVisitor;
 
-pub struct SymbolChecker {
-    active_scope: usize,
-    scopes: Vec<Vec<String>>,
-    functions: HashMap<String, Vec<String>>,
+pub struct TypeChecker<'a> {
+    symbol_table: &'a SymbolTable,
     diagnostics: DiagnosticsColletionCell,
 }
 
-impl SymbolChecker {
-    pub fn new(diagnostics: DiagnosticsColletionCell) -> Self {
+impl<'a> TypeChecker<'a> {
+    pub fn new(diagnostics: DiagnosticsColletionCell, symbol_tabel: &mut SymbolTable) -> Self {
         Self {
-            active_scope: 0,
-            scopes: vec![Vec::new()],
-            functions: HashMap::new(),
+            symbol_table,
             diagnostics,
         }
     }
@@ -49,7 +45,7 @@ impl SymbolChecker {
     }
 }
 
-impl ASTVisitor<()> for SymbolChecker {
+impl ASTVisitor<()> for TypeChecker {
     fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
         self.visit_expression(&statement.expr);
     }

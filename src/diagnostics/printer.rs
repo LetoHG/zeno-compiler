@@ -42,7 +42,7 @@ impl<'a> DiagnosticsPrinter<'a> {
 
         format!(
             // "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{}\n{whitespace}|\n{whitespace}+-- {}{}",
-            "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{} {}({}:{}){}",
+            "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{} {} ({}:{}){}",
             color::Fg(color::Blue),
             color::Fg(color::Reset),
             color::Fg(message_color.as_ref()),
