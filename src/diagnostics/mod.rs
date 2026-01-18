@@ -30,7 +30,7 @@ pub struct DiagnosticsColletion {
     pub count_warnings: usize,
 }
 
-pub type DiagnosticsColletionCell = Rc<RefCell<DiagnosticsColletion>>;
+pub type DiagnosticsCollectionCell = Rc<RefCell<DiagnosticsCollection>>;
 
 impl DiagnosticsColletion {
     pub fn new() -> Self {
