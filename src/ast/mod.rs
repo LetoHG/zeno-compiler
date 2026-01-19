@@ -9,15 +9,40 @@ pub mod symbol_table;
 pub mod symbol_table_builder;
 pub mod type_checker;
 
+pub type StmntId = usize;
+pub type ExprId = usize;
+
 pub struct Ast {
     statements: Vec<ASTStatement>,
+    expressions: Vec<ASTExpression>,
+    top_level_statements: Vec<StmntId>,
 }
 
 impl Ast {
     pub fn new() -> Self {
         Self {
             statements: Vec::new(),
+            expressions: Vec::new(),
+            top_level_statements: Vec::new(),
         }
+    }
+
+    pub fn add_stmnt(&mut self, kind: ASTStatementKind) -> StmntId {
+        let id = self.statements.len();
+        self.statements.push(ASTStatement { kind, id });
+        id
+    }
+    pub fn add_expr(&mut self, kind: ASTExpressionKind) -> Option<&ASTExpression> {
+        let id = self.expressions.len();
+        self.expressions.push(ASTExpression::new(kind, id));
+        self.expressions.last()
+    }
+
+    pub fn query_statement(&self, id: StmntId) -> &ASTStatement {
+        self.statements.get(id).unwrap()
+    }
+    pub fn query_expression(&self, id: ExprId) -> &ASTExpression {
+        self.expressions.get(id).unwrap()
     }
 
     pub fn add_statement(&mut self, statement: ASTStatement) {
@@ -36,6 +61,91 @@ impl Ast {
         println!("{decoration}\nAST:\n{decoration}");
         self.visit(&mut printer);
         println!("{decoration}\n");
+    }
+
+    // Expression helpers
+    fn error(&mut self, span: TextSpan) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Error(span))
+    }
+
+    fn integer(&mut self, i: i64) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::IntegerLiteral(i))
+    }
+    fn float(&mut self, f: f64) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::FloatingLiteral(f))
+    }
+
+    fn boolean(&mut self, b: bool) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::BooleanLiteral(b))
+    }
+
+    fn identifier(&mut self, token: Token) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Variable(ASTVariableExpression {
+            identifier: token,
+        }))
+    }
+
+    fn member_access(&mut self, token: Token, expr_id: ExprId) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::MemberAccess(ASTMemberAccessExpression {
+            identifier: token,
+            member: expr_id,
+        }))
+    }
+
+    fn assignment(&mut self, token: Token, expr_id: ExprId) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Assignment(ASTAssignmentExpression {
+            identifier: token,
+            expr: expr_id,
+        }))
+    }
+
+    fn unary(&mut self, operator: ASTUnaryOperator, expr_id: ExprId) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Unary(ASTUnaryExpression {
+            operator,
+            expr: expr_id,
+        }))
+    }
+
+    fn binary(
+        &mut self,
+        operator: ASTBinaryOperator,
+        left_id: ExprId,
+        right_id: ExprId,
+    ) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Binary(ASTBinaryExpression {
+            operator,
+            left: left_id,
+            right: right_id,
+        }))
+    }
+
+    fn parenthesized(&mut self, expr_id: ExprId) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::Parenthesized(
+            ASTParenthesizedExpression { expr: expr_id },
+        ))
+    }
+
+    fn function_call(
+        &mut self,
+        identifier: Token,
+        arguments: Vec<ExprId>,
+    ) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::FunctionCall(ASTFunctionCallExpression {
+            identifier,
+            arguments,
+        }))
+    }
+    fn struct_initializer(
+        &mut self,
+        identifier: Token,
+        members_initializers: Vec<StructMemberInitializer>,
+    ) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::StructCtor(
+            ASTStructInitializerExpression {
+                identifier,
+                members_initializers,
+            },
+        ))
     }
 }
 
@@ -132,7 +242,7 @@ pub trait ASTVisitor<T> {
 
 #[derive(Clone)]
 enum ASTStatementKind {
-    Expr(ASTExpression),
+    Expr(ExprId),
     Let(ASTLetStatement),
     Var(ASTVarStatement),
     StructDecl(ASTStructStatement),
@@ -148,14 +258,14 @@ enum ASTStatementKind {
 pub struct ASTLetStatement {
     identifier: Token,
     data_type: Token,
-    initializer: ASTExpression,
+    initializer: ExprId,
 }
 
 #[derive(Clone)]
 pub struct ASTVarStatement {
     identifier: Token,
     data_type: Token,
-    initializer: ASTExpression,
+    initializer: ExprId,
 }
 
 #[derive(Clone, Debug)]
@@ -173,7 +283,7 @@ pub struct ASTStructStatement {
 #[derive(Clone)]
 pub struct ASTReturnStatement {
     keyword: Token,
-    expr: ASTExpression,
+    expr: ExprId,
 }
 #[derive(Clone)]
 pub struct ASTCompoundStatement {
@@ -204,7 +314,7 @@ pub struct ASTElseStatement {
 #[derive(Clone)]
 pub struct ASTIfStatement {
     keyword: Token,
-    condition: ASTExpression,
+    condition: ExprId,
     then_branch: Box<ASTStatement>,
     else_branch: Option<ASTElseStatement>,
 }
@@ -212,7 +322,7 @@ pub struct ASTIfStatement {
 #[derive(Clone)]
 pub struct ASTWhileStatement {
     keyword: Token,
-    condition: ASTExpression,
+    condition: ExprId,
     body: Box<ASTStatement>,
 }
 
@@ -220,48 +330,53 @@ pub struct ASTWhileStatement {
 pub struct ASTForStatement {
     keyword: Token,
     loop_variable: Token,
-    range: (ASTExpression, ASTExpression),
+    range: (ExprId, ExprId),
     body: Box<ASTStatement>,
 }
 
 #[derive(Clone)]
 pub struct ASTStatement {
     kind: ASTStatementKind,
+    id: StmntId,
 }
 
 impl ASTStatement {
     fn new(kind: ASTStatementKind) -> Self {
-        Self { kind }
+        Self { kind, id: 0 }
     }
 
-    fn expression(expr: ASTExpression) -> Self {
+    fn expression(expr_id: ExprId) -> Self {
         Self {
-            kind: ASTStatementKind::Expr(expr),
+            kind: ASTStatementKind::Expr(expr_id),
+            id: 0,
         }
     }
 
-    fn return_statement(keyword: Token, expr: ASTExpression) -> Self {
+    fn return_statement(keyword: Token, expr: ExprId) -> Self {
         Self {
             kind: ASTStatementKind::Return(ASTReturnStatement { keyword, expr }),
+            id: 0,
         }
     }
-    fn let_statement(identifier: Token, data_type: Token, initializer: ASTExpression) -> Self {
+    fn let_statement(identifier: Token, data_type: Token, initializer: ExprId) -> Self {
         Self {
             kind: ASTStatementKind::Let(ASTLetStatement {
                 identifier,
                 data_type,
                 initializer,
             }),
+            id: 0,
         }
     }
 
-    fn var_statement(identifier: Token, data_type: Token, initializer: ASTExpression) -> Self {
+    fn var_statement(identifier: Token, data_type: Token, initializer: ExprId) -> Self {
         Self {
             kind: ASTStatementKind::Var(ASTVarStatement {
                 identifier,
                 data_type,
                 initializer,
             }),
+            id: 0,
         }
     }
 
@@ -272,12 +387,13 @@ impl ASTStatement {
                 start_brace,
                 end_brace,
             }),
+            id: 0,
         }
     }
 
     fn conditional(
         keyword: Token,
-        condition: ASTExpression,
+        condition: ExprId,
         then_branch: ASTStatement,
         else_branch: Option<ASTElseStatement>,
     ) -> Self {
@@ -288,23 +404,25 @@ impl ASTStatement {
                 then_branch: Box::new(then_branch),
                 else_branch,
             }),
+            id: 0,
         }
     }
 
-    fn while_loop(keyword: Token, condition: ASTExpression, body: ASTStatement) -> Self {
+    fn while_loop(keyword: Token, condition: ExprId, body: ASTStatement) -> Self {
         Self {
             kind: ASTStatementKind::While(ASTWhileStatement {
                 keyword,
                 condition,
                 body: Box::new(body),
             }),
+            id: 0,
         }
     }
 
     fn for_loop(
         keyword: Token,
         loop_variable: Token,
-        range: (ASTExpression, ASTExpression),
+        range: (ExprId, ExprId),
         body: ASTStatement,
     ) -> Self {
         Self {
@@ -314,6 +432,7 @@ impl ASTStatement {
                 range,
                 body: Box::new(body),
             }),
+            id: 0,
         }
     }
 
@@ -330,6 +449,7 @@ impl ASTStatement {
                 body: Box::new(body),
                 return_type,
             }),
+            id: 0,
         }
     }
 
@@ -339,6 +459,7 @@ impl ASTStatement {
                 identifier,
                 members,
             }),
+            id: 0,
         }
     }
 }
@@ -363,104 +484,12 @@ enum ASTExpressionKind {
 #[derive(Clone, PartialEq)]
 pub struct ASTExpression {
     kind: ASTExpressionKind,
+    id: ExprId,
 }
 
 impl ASTExpression {
-    fn new(kind: ASTExpressionKind) -> Self {
-        Self { kind }
-    }
-    fn error(span: TextSpan) -> Self {
-        Self {
-            kind: ASTExpressionKind::Error(span),
-        }
-    }
-
-    fn integer(i: i64) -> Self {
-        Self {
-            kind: ASTExpressionKind::IntegerLiteral(i),
-        }
-    }
-    fn float(f: f64) -> Self {
-        Self {
-            kind: ASTExpressionKind::FloatingLiteral(f),
-        }
-    }
-
-    fn boolean(b: bool) -> Self {
-        Self {
-            kind: ASTExpressionKind::BooleanLiteral(b),
-        }
-    }
-
-    fn identifier(token: Token) -> Self {
-        Self {
-            kind: ASTExpressionKind::Variable(ASTVariableExpression { identifier: token }),
-        }
-    }
-
-    fn member_access(token: Token, expr: ASTExpression) -> Self {
-        Self {
-            kind: ASTExpressionKind::MemberAccess(ASTMemberAccessExpression {
-                identifier: token,
-                member: Box::new(expr),
-            }),
-        }
-    }
-
-    fn assignment(token: Token, expr: ASTExpression) -> Self {
-        Self {
-            kind: ASTExpressionKind::Assignment(ASTAssignmentExpression {
-                identifier: token,
-                expr: Box::new(expr),
-            }),
-        }
-    }
-
-    fn unary(operator: ASTUnaryOperator, expr: ASTExpression) -> Self {
-        Self {
-            kind: ASTExpressionKind::Unary(ASTUnaryExpression {
-                operator,
-                expr: Box::new(expr),
-            }),
-        }
-    }
-
-    fn binary(operator: ASTBinaryOperator, left: ASTExpression, right: ASTExpression) -> Self {
-        Self {
-            kind: ASTExpressionKind::Binary(ASTBinaryExpression {
-                operator,
-                left: Box::new(left),
-                right: Box::new(right),
-            }),
-        }
-    }
-
-    fn parenthesized(expr: ASTExpression) -> Self {
-        Self {
-            kind: ASTExpressionKind::Parenthesized(ASTParenthesizedExpression {
-                expr: Box::new(expr),
-            }),
-        }
-    }
-
-    fn function_call(identifier: Token, arguments: Vec<ASTExpression>) -> Self {
-        Self {
-            kind: ASTExpressionKind::FunctionCall(ASTFunctionCallExpression {
-                identifier,
-                arguments,
-            }),
-        }
-    }
-    fn struct_initializer(
-        identifier: Token,
-        members_initializers: Vec<StructMemberInitializer>,
-    ) -> Self {
-        Self {
-            kind: ASTExpressionKind::StructCtor(ASTStructInitializerExpression {
-                identifier,
-                members_initializers,
-            }),
-        }
+    fn new(kind: ASTExpressionKind, id: ExprId) -> Self {
+        Self { kind, id }
     }
 }
 
@@ -479,7 +508,7 @@ struct ASTUnaryOperator {
 #[derive(Clone, PartialEq)]
 pub struct ASTUnaryExpression {
     operator: ASTUnaryOperator,
-    expr: Box<ASTExpression>,
+    expr: ExprId,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -532,13 +561,13 @@ impl ASTBinaryOperator {
 #[derive(Clone, PartialEq)]
 pub struct ASTBinaryExpression {
     operator: ASTBinaryOperator,
-    left: Box<ASTExpression>,
-    right: Box<ASTExpression>,
+    left: ExprId,
+    right: ExprId,
 }
 
 #[derive(Clone, PartialEq)]
 pub struct ASTParenthesizedExpression {
-    expr: Box<ASTExpression>,
+    expr: ExprId,
 }
 
 #[derive(Clone, PartialEq)]
@@ -549,13 +578,13 @@ pub struct ASTVariableExpression {
 #[derive(Clone, PartialEq)]
 pub struct ASTMemberAccessExpression {
     identifier: Token,
-    member: Box<ASTExpression>,
+    member: ExprId,
 }
 
 #[derive(Clone, PartialEq)]
 pub struct ASTAssignmentExpression {
     identifier: Token,
-    expr: Box<ASTExpression>,
+    expr: ExprId,
 }
 
 impl ASTVariableExpression {
@@ -567,7 +596,7 @@ impl ASTVariableExpression {
 #[derive(Clone, PartialEq)]
 pub struct ASTFunctionCallExpression {
     identifier: Token,
-    arguments: Vec<ASTExpression>,
+    arguments: Vec<ExprId>,
 }
 
 impl ASTFunctionCallExpression {

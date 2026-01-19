@@ -13,7 +13,7 @@ use std::{
 use super::lexer::TextSpan;
 use super::{
     ASTBinaryOperator, ASTBinaryOperatorKind, ASTElseStatement, ASTUnaryOperator,
-    ASTUnaryOperatorKind, FunctionArgumentDeclaration,
+    ASTUnaryOperatorKind, Ast, ExprId, FunctionArgumentDeclaration,
 };
 
 struct Cursor {
@@ -37,16 +37,18 @@ impl Cursor {
     }
 }
 
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: Cursor,
     diagnostics_colletion: DiagnosticsColletionCell,
+    ast: &'a mut Ast,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     pub fn new(
         tokens: Vec<Token>,
         diagnostics_colletion: Rc<RefCell<DiagnosticsColletion>>,
+        ast: &'a mut Ast,
     ) -> Self {
         Self {
             tokens: tokens
@@ -61,10 +63,15 @@ impl Parser {
                 .collect(),
             cursor: Cursor::new(),
             diagnostics_colletion,
+            ast,
         }
     }
 
-    pub fn from_input(input: String, diagnostics_colletion: DiagnosticsColletionCell) -> Self {
+    pub fn from_input(
+        input: String,
+        diagnostics_colletion: DiagnosticsColletionCell,
+        ast: &'a mut Ast,
+    ) -> Self {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         while let Some(token) = lexer.next_token() {
@@ -79,6 +86,7 @@ impl Parser {
             tokens,
             cursor: Cursor::new(),
             diagnostics_colletion,
+            ast,
         }
     }
 
@@ -136,7 +144,7 @@ impl Parser {
 
     fn parse_return_statement(&mut self) -> Option<ASTStatement> {
         let keyword = self.consume_expected(TokenKind::Return)?.clone();
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
         Some(ASTStatement::return_statement(keyword, expr))
     }
@@ -147,7 +155,7 @@ impl Parser {
         self.consume_expected(TokenKind::Colon)?;
         let data_type = self.consume().clone();
         self.consume_expected(TokenKind::Equal)?;
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
         Some(ASTStatement::let_statement(identifier, data_type, expr))
     }
@@ -158,7 +166,7 @@ impl Parser {
         self.consume_expected(TokenKind::Colon)?;
         let data_type = self.consume().clone();
         self.consume_expected(TokenKind::Equal)?;
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
         Some(ASTStatement::var_statement(identifier, data_type, expr))
     }
@@ -314,7 +322,7 @@ impl Parser {
 
     fn parse_if_statement(&mut self) -> Option<ASTStatement> {
         let keyword = self.consume_expected(TokenKind::If)?.clone();
-        let condition = self.parse_expression()?;
+        let condition = self.parse_expression()?.id;
         let then_branch = self.parse_compound_statement()?;
         let else_branch = self.consume_optional_else_statement();
 
@@ -328,7 +336,7 @@ impl Parser {
 
     fn parse_while_loop_statement(&mut self) -> Option<ASTStatement> {
         let keyword = self.consume_expected(TokenKind::While)?.clone();
-        let condition = self.parse_expression()?;
+        let condition = self.parse_expression()?.id;
         let body = self.parse_compound_statement()?;
 
         Some(ASTStatement::while_loop(keyword, condition, body))
@@ -338,10 +346,10 @@ impl Parser {
         let keyword = self.consume_expected(TokenKind::For)?.clone();
         let loop_variable = self.consume_expected(TokenKind::Identifier)?.clone();
         self.consume_expected(TokenKind::In)?;
-        let range_start = self.parse_expression()?;
+        let range_start = self.parse_expression()?.id;
         self.consume_expected(TokenKind::Dot)?;
         self.consume_expected(TokenKind::Dot)?;
-        let range_end = self.parse_expression()?;
+        let range_end = self.parse_expression()?.id;
 
         let body = self.parse_compound_statement()?;
 
@@ -354,12 +362,12 @@ impl Parser {
     }
 
     fn parse_expression_statement(&mut self) -> Option<ASTStatement> {
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
         Some(ASTStatement::expression(expr))
     }
 
-    fn parse_assignment_expression(&mut self) -> Option<ASTExpression> {
+    fn parse_assignment_expression(&mut self) -> Option<&ASTExpression> {
         if self.current_token().kind != TokenKind::Identifier {
             return self.parse_binary_expression(0);
         }
@@ -369,8 +377,8 @@ impl Parser {
         if self.peek(1).kind == TokenKind::Equal {
             let var = self.consume().clone();
             self.consume_expected(TokenKind::Equal)?;
-            let assignment = self.parse_binary_expression(0)?;
-            return Some(ASTExpression::assignment(var, assignment));
+            let assignment = self.parse_binary_expression(0)?.id;
+            return self.ast.assignment(var, assignment);
         }
         if self.peek(1).kind == TokenKind::PlusEqual
             || self.peek(1).kind == TokenKind::MinusEqual
@@ -379,20 +387,19 @@ impl Parser {
         {
             let var = self.consume().clone();
             let op = self.consume_assignment_operator();
-            let assignment = self.parse_binary_expression(0)?;
-            return Some(ASTExpression::assignment(
-                var.clone(),
-                ASTExpression::binary(op, ASTExpression::identifier(var.clone()), assignment),
-            ));
+            let assignment = self.parse_binary_expression(0)?.id;
+            let og = self.ast.identifier(var.clone())?.id;
+            let a = self.ast.binary(op, og, assignment)?.id;
+            return self.ast.assignment(var.clone(), a);
         }
         self.parse_binary_expression(0)
     }
 
-    fn parse_expression(&mut self) -> Option<ASTExpression> {
+    fn parse_expression(&mut self) -> Option<&ASTExpression> {
         self.parse_assignment_expression()
     }
 
-    fn parse_arguments_list(&mut self) -> Option<Vec<ASTExpression>> {
+    fn parse_arguments_list(&mut self) -> Option<Vec<ExprId>> {
         if self.current_token().kind == TokenKind::Comma {
             self.diagnostics_colletion
                 .borrow_mut()
@@ -401,7 +408,7 @@ impl Parser {
             return None;
         }
 
-        let mut arguments: Vec<ASTExpression> = Vec::new();
+        let mut arguments: Vec<ExprId> = Vec::new();
         while self.current_token().kind != TokenKind::RightParen
             && self.current_token().kind != TokenKind::Eof
         {
@@ -412,7 +419,7 @@ impl Parser {
                 self.consume();
                 return None;
             }
-            arguments.push(self.parse_expression()?);
+            arguments.push(self.parse_expression()?.id);
             if self.current_token().kind == TokenKind::Comma
                 && self.peek(1).kind == TokenKind::RightParen
             {
@@ -425,82 +432,84 @@ impl Parser {
         Some(arguments)
     }
 
-    fn parse_function_call_expression(&mut self) -> Option<ASTExpression> {
+    fn parse_function_call_expression(&mut self) -> Option<&ASTExpression> {
         let identifier = self.peek(-1).clone();
         self.consume();
         let arguments = self.parse_arguments_list()?;
         self.consume_expected(TokenKind::RightParen)?;
-        Some(ASTExpression::function_call(identifier.clone(), arguments))
+        self.ast.function_call(identifier.clone(), arguments)
     }
 
-    fn parse_struct_initializer_expression(&mut self) -> Option<ASTExpression> {
-        let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
-        self.consume_expected(TokenKind::LeftBrace)?;
-
-        let mut members: Vec<StructMemberInitializer> = Vec::new();
-        while self.current_token().kind != TokenKind::RightBrace
-            && self.current_token().kind != TokenKind::Eof
-        {
-            self.consume_expected(TokenKind::Dot);
-            if self.current_token().kind == TokenKind::Identifier {
-                let identifier = self.consume().clone();
-                self.consume_expected(TokenKind::Colon)?;
-                // TODO(letohg): [2026-01-18] add member default initializer
-                let initializer = self.parse_expression()?;
-                members.push(StructMemberInitializer {
-                    identifier,
-                    initializer,
-                });
-            } else {
-                self.diagnostics_colletion
-                    .borrow_mut()
-                    .report_unexpected_token(&TokenKind::Identifier, self.current_token());
-                return None;
-            }
-
-            if self.current_token().kind == TokenKind::RightBrace {
-                break;
-            }
-            self.consume_expected(TokenKind::Comma);
-        }
-
-        self.consume_expected(TokenKind::RightBrace)?;
-
-        Some(ASTExpression::struct_initializer(identifier, members))
+    fn parse_struct_initializer_expression(&mut self) -> Option<&ASTExpression> {
+        None
+        // let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
+        // self.consume_expected(TokenKind::LeftBrace)?;
+        //
+        // let mut members: Vec<StructMemberInitializer> = Vec::new();
+        // while self.current_token().kind != TokenKind::RightBrace
+        //     && self.current_token().kind != TokenKind::Eof
+        // {
+        //     self.consume_expected(TokenKind::Dot);
+        //     if self.current_token().kind == TokenKind::Identifier {
+        //         let identifier = self.consume().clone();
+        //         self.consume_expected(TokenKind::Colon)?;
+        //         // TODO(letohg): [2026-01-18] add member default initializer
+        //         let initializer = self.parse_expression()?;
+        //         members.push(StructMemberInitializer {
+        //             identifier,
+        //             initializer,
+        //         });
+        //     } else {
+        //         self.diagnostics_colletion
+        //             .borrow_mut()
+        //             .report_unexpected_token(&TokenKind::Identifier, self.current_token());
+        //         return None;
+        //     }
+        //
+        //     if self.current_token().kind == TokenKind::RightBrace {
+        //         break;
+        //     }
+        //     self.consume_expected(TokenKind::Comma);
+        // }
+        //
+        // self.consume_expected(TokenKind::RightBrace)?;
+        //
+        // Some(self.ast.struct_initializer(identifier, members))
     }
 
-    fn parse_primary_expression(&mut self) -> Option<ASTExpression> {
+    fn parse_primary_expression(&mut self) -> Option<&ASTExpression> {
         let token = self.consume().clone();
 
         return match token.kind {
-            TokenKind::Integer(i) => Some(ASTExpression::integer(i)),
-            TokenKind::Floating(i) => Some(ASTExpression::float(i)),
+            TokenKind::Integer(i) => self.ast.integer(i),
+            TokenKind::Floating(i) => self.ast.float(i),
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
                 } else if self.current_token().kind == TokenKind::Dot {
-                    self.consume();
-                    let member: ASTExpression = self.parse_expression()?;
-                    match member.kind {
-                        ASTExpressionKind::Variable(_) => {
-                            return Some(ASTExpression::member_access(token.clone(), member));
-                        }
-                        ASTExpressionKind::MemberAccess(_) => return None,
-                        _ => return None,
-                    };
+                    None
+                    // self.consume();
+                    // let member: &ASTExpression = self.parse_expression()?;
+                    // match member.kind {
+                    //     ASTExpressionKind::Variable(_) => {
+                    //         // return self.ast.member_access(token.clone(), member.id.clone());
+                    //     }
+                    //     ASTExpressionKind::MemberAccess(_) => return None,
+                    //     _ => return None,
+                    // };
                 } else if token.name() == "false" {
-                    Some(ASTExpression::boolean(false))
+                    self.ast.boolean(false)
                 } else if token.name() == "true" {
-                    Some(ASTExpression::boolean(true))
+                    self.ast.boolean(true)
                 } else {
-                    Some(ASTExpression::identifier(token.clone()))
+                    self.ast.identifier(token.clone())
                 }
             }
 
             TokenKind::LeftParen => {
-                let expr = self.parse_binary_expression(0)?;
+                let expr = self.parse_binary_expression(0)?.id;
                 let _found_token = self.consume_expected(TokenKind::RightParen)?;
-                Some(ASTExpression::parenthesized(expr))
+                self.ast.parenthesized(expr)
             }
             TokenKind::Tilde | TokenKind::Minus | TokenKind::ExclemationMark => {
                 self.parse_unary_expression()
@@ -509,30 +518,31 @@ impl Parser {
                 self.diagnostics_colletion
                     .borrow_mut()
                     .report_expected_expression(&token);
-                Some(ASTExpression::error(token.span))
+                self.ast.error(token.span)
             }
         };
     }
 
-    fn parse_unary_expression(&mut self) -> Option<ASTExpression> {
+    fn parse_unary_expression(&mut self) -> Option<&ASTExpression> {
         let operator = self.parse_unary_operator().unwrap();
-        let expr = self.parse_primary_expression()?;
-        Some(ASTExpression::unary(operator, expr))
+        let expr = self.parse_primary_expression()?.id;
+        // Some(ASTExpression::unary(operator, expr))
+        self.ast.unary(operator, expr)
     }
-    fn parse_binary_expression(&mut self, precedence: u8) -> Option<ASTExpression> {
-        let mut left = self.parse_primary_expression()?;
+    fn parse_binary_expression(&mut self, precedence: u8) -> Option<&ASTExpression> {
+        let mut left = self.parse_primary_expression()?.id;
 
         while let Some(operator) = self.parse_binary_operator() {
             let operator_precedence = operator.precedence();
             if operator_precedence > precedence {
                 self.consume();
-                let right = self.parse_binary_expression(operator_precedence)?;
-                left = ASTExpression::binary(operator, left, right);
+                let right = self.parse_binary_expression(operator_precedence)?.id;
+                left = self.ast.binary(operator, left, right)?.id;
             } else {
                 break;
             }
         }
-        Some(left)
+        Some(self.ast.query_expression(left))
     }
 
     fn parse_binary_operator(&mut self) -> Option<ASTBinaryOperator> {

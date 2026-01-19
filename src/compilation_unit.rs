@@ -27,10 +27,11 @@ impl CompilationUnit {
 
         let diagnostics_colletion = Rc::new(RefCell::new(DiagnosticsColletion::new()));
         let mut ast = ast::Ast::new();
-        let mut parser = ast::parser::Parser::new(tokens, Rc::clone(&diagnostics_colletion));
-        while let Some(statement) = parser.next_statement() {
-            ast.add_statement(statement);
-        }
+        let mut parser =
+            ast::parser::Parser::new(tokens, Rc::clone(&diagnostics_colletion), &mut ast);
+        // while let Some(statement) = parser.next_statement() {
+        //     ast.add_statement(statement);
+        // }
         ast.visualize();
 
         let mut highlight_printer = ASTHiglightPrinter::new();
