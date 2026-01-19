@@ -29,14 +29,11 @@ impl CompilationUnit {
         let mut ast = ast::Ast::new();
         let mut parser =
             ast::parser::Parser::new(tokens, Rc::clone(&diagnostics_colletion), &mut ast);
-        // while let Some(statement) = parser.next_statement() {
-        //     ast.add_statement(statement);
-        // }
+        parser.parse();
         ast.visualize();
 
         let mut highlight_printer = ASTHiglightPrinter::new();
-        ast.visit(&mut highlight_printer);
-        highlight_printer.print_result();
+        highlight_printer.do_print(&mut ast);
         Self::check_diagstics("Parser", &source_text, &diagnostics_colletion)?;
 
         let mut symbol_table = symbol_table::SymbolTable::new();
@@ -44,12 +41,12 @@ impl CompilationUnit {
             Rc::clone(&diagnostics_colletion),
             &mut symbol_table,
         );
-        symbol_table_builder.build(&ast);
+        symbol_table_builder.build(&mut ast);
         Self::check_diagstics("SymbolTableBuilder", &source_text, &diagnostics_colletion)?;
 
         let mut type_checker =
             type_checker::TypeChecker::new(Rc::clone(&diagnostics_colletion), &mut symbol_table);
-        type_checker.analyze(&ast);
+        type_checker.analyze(&mut ast);
         Self::check_diagstics("TypeChecker", &source_text, &diagnostics_colletion)?;
 
         Ok(Self {
@@ -60,9 +57,10 @@ impl CompilationUnit {
 
     pub fn run(&self) {
         let mut solver = ASTSolver::new();
-        self.ast.visit(&mut solver);
-        // solver.print_result();
-        solver.solve();
+        // solver.solve(&mut self.ast);
+        // self.ast.visit(&mut solver);
+        // // solver.print_result();
+        // solver.solve();
     }
 
     fn check_diagstics(
