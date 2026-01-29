@@ -1,6 +1,8 @@
 use lexer::{TextSpan, Token};
 use printer::ASTTreePrinter;
 
+use crate::ast::typing::TypeId;
+
 pub mod lexer;
 pub mod parser;
 pub mod printer;
@@ -8,6 +10,7 @@ pub mod solver;
 pub mod symbol_table;
 pub mod symbol_table_builder;
 pub mod type_checker;
+pub mod typing;
 
 pub type StmntId = usize;
 pub type ExprId = usize;
@@ -542,11 +545,12 @@ enum ASTExpressionKind {
 pub struct ASTExpression {
     kind: ASTExpressionKind,
     id: ExprId,
+    ty: Option<TypeId>,
 }
 
 impl ASTExpression {
     fn new(kind: ASTExpressionKind, id: ExprId) -> Self {
-        Self { kind, id }
+        Self { kind, id, ty: None }
     }
 }
 

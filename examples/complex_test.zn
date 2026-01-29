@@ -12,16 +12,16 @@ func sum_range(start: i32, end: i32) -> i32 {
 }
 
 
-func average_range(start: i32, end: i32) -> f32 {
+func average_range(start: i32, end: i32) -> i32 {
     if start > end {
-        return 0.0;
+        return 0;
     }
 
     let total: i32 = sum_range(start, end);
     let count: i32 = end - start;
 
     // Tests numeric type rules (i32 -> f32)
-    let avg: f32 = total / count;
+    let avg: i32 = total / count;
     return avg;
 }
 
@@ -46,7 +46,7 @@ func main() -> i32 {
     // println("Sum:");
     println(sum);
 
-    let avg: f32 = average_range(start, end);
+    let avg: i32 = average_range(start, end);
     // println("Average:");
     println(avg);
 

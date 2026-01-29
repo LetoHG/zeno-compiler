@@ -3,6 +3,7 @@ use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
 use crate::ast::symbol_table::VariableInfo;
+use crate::ast::typing::TypeTable;
 use crate::ast::Ast;
 use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsCollectionCell};
 
@@ -11,6 +12,7 @@ use super::{ASTStatementKind, ASTVisitor};
 pub struct TypeChecker<'a> {
     symbol_table: &'a mut SymbolTable,
     diagnostics: DiagnosticsColletionCell,
+    type_table: TypeTable,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -18,6 +20,7 @@ impl<'a> TypeChecker<'a> {
         Self {
             symbol_table,
             diagnostics,
+            type_table: TypeTable::new(),
         }
     }
 
