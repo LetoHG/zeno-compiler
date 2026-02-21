@@ -25,7 +25,7 @@ impl CompilationUnit {
             tokens.push(token);
         }
 
-        let diagnostics_colletion = Rc::new(RefCell::new(DiagnosticsColletion::new()));
+        let diagnostics_colletion = Rc::new(RefCell::new(DiagnosticsCollection::new()));
         let mut ast = ast::Ast::new();
         let mut parser =
             ast::parser::Parser::new(tokens, Rc::clone(&diagnostics_colletion), &mut ast);

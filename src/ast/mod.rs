@@ -44,8 +44,13 @@ impl Ast {
     pub fn query_statement(&self, id: StmntId) -> &ASTStatement {
         self.statements.get(id).unwrap()
     }
+
     pub fn query_expression(&self, id: ExprId) -> &ASTExpression {
         self.expressions.get(id).unwrap()
+    }
+
+    pub fn query_expression_mut(&mut self, id: ExprId) -> &mut ASTExpression {
+        self.expressions.get_mut(id).unwrap()
     }
 
     pub fn add_statement(&mut self, statement: ASTStatement) {
@@ -261,18 +266,28 @@ pub trait ASTVisitor<T> {
     fn do_visit_expression(&mut self, ast: &mut Ast, expr_id: ExprId) -> T {
         let expr = ast.query_expression(expr_id).clone();
         match &expr.kind {
-            ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(i),
-            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone()),
-            ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f),
-            ASTExpressionKind::Variable(expr) => self.visit_variable_expression(ast, expr),
-            ASTExpressionKind::StringLiteral(_) => todo!(),
-            ASTExpressionKind::Unary(expr) => self.visit_unary_expression(ast, expr),
-            ASTExpressionKind::Binary(expr) => self.visit_binary_expression(ast, expr),
-            ASTExpressionKind::Parenthesized(expr) => {
-                self.visit_parenthesised_expression(ast, expr)
+            ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(i, &expr),
+            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone(), &expr),
+            ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f, &expr),
+            ASTExpressionKind::Variable(var_expr) => {
+                self.visit_variable_expression(ast, var_expr, &expr)
             }
-            ASTExpressionKind::FunctionCall(expr) => self.visit_function_call_expression(ast, expr),
-            ASTExpressionKind::Assignment(expr) => self.visit_assignment_expression(ast, expr),
+            ASTExpressionKind::StringLiteral(_) => todo!(),
+            ASTExpressionKind::Unary(unary_expr) => {
+                self.visit_unary_expression(ast, unary_expr, &expr)
+            }
+            ASTExpressionKind::Binary(binary_expr) => {
+                self.visit_binary_expression(ast, binary_expr, &expr)
+            }
+            ASTExpressionKind::Parenthesized(paren_expr) => {
+                self.visit_parenthesised_expression(ast, paren_expr, &expr)
+            }
+            ASTExpressionKind::FunctionCall(call_expr) => {
+                self.visit_function_call_expression(ast, call_expr, &expr)
+            }
+            ASTExpressionKind::Assignment(assign_expr) => {
+                self.visit_assignment_expression(ast, assign_expr, &expr)
+            }
             ASTExpressionKind::Error(span) => self.visit_error(span),
         }
     }
@@ -294,11 +309,23 @@ pub trait ASTVisitor<T> {
         return self.do_visit_expression(ast, expr_id);
     }
 
-    fn visit_assignment_expression(&mut self, ast: &mut Ast, expr: &ASTAssignmentExpression) -> T;
+    fn visit_assignment_expression(
+        &mut self,
+        ast: &mut Ast,
+        assign_expr: &ASTAssignmentExpression,
+        expr: &ASTExpression,
+    ) -> T;
     fn visit_function_call_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &ASTFunctionCallExpression,
+        call_expr: &ASTFunctionCallExpression,
+        expr: &ASTExpression,
+    ) -> T;
+    fn visit_variable_expression(
+        &mut self,
+        ast: &mut Ast,
+        variable_expr: &ASTVariableExpression,
+        expr: &ASTExpression,
     ) -> T;
     fn visit_unary_expression(
         &mut self,
@@ -315,14 +342,15 @@ pub trait ASTVisitor<T> {
     fn visit_parenthesised_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &ASTParenthesizedExpression,
+        paren_expr: &ASTParenthesizedExpression,
+        expr: &ASTExpression,
     ) -> T;
     fn visit_binary_operator(&mut self, op: &ASTBinaryOperator) -> T;
 
     fn visit_error(&mut self, span: &TextSpan) -> T;
-    fn visit_integer(&mut self, integer: &i64) -> T;
-    fn visit_boolean(&mut self, boolean: bool) -> T;
-    fn visit_float(&mut self, float: &f64) -> T;
+    fn visit_integer(&mut self, integer: &i64, expr: &ASTExpression) -> T;
+    fn visit_boolean(&mut self, boolean: bool, expr: &ASTExpression) -> T;
+    fn visit_float(&mut self, float: &f64, expr: &ASTExpression) -> T;
 }
 
 #[derive(Clone)]

@@ -24,7 +24,7 @@ impl Diagnostic {
     }
 }
 
-pub struct DiagnosticsColletion {
+pub struct DiagnosticsCollection {
     pub diagnostics: Vec<Diagnostic>,
     pub count_errors: usize,
     pub count_warnings: usize,
@@ -32,7 +32,7 @@ pub struct DiagnosticsColletion {
 
 pub type DiagnosticsCollectionCell = Rc<RefCell<DiagnosticsCollection>>;
 
-impl DiagnosticsColletion {
+impl DiagnosticsCollection {
     pub fn new() -> Self {
         Self {
             diagnostics: vec![],

@@ -3,6 +3,7 @@ use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
 use crate::ast::symbol_table::VariableInfo;
+use crate::ast::typing::TypeId;
 use crate::ast::typing::TypeTable;
 use crate::ast::Ast;
 use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsCollectionCell};
@@ -11,7 +12,7 @@ use super::{ASTStatementKind, ASTVisitor};
 
 pub struct TypeChecker<'a> {
     symbol_table: &'a mut SymbolTable,
-    diagnostics: DiagnosticsColletionCell,
+    diagnostics: DiagnosticsCollectionCell,
     type_table: TypeTable,
 }
 
@@ -55,12 +56,12 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
-impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
+impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
     fn visit_return_statement(
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTReturnStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         let actual = self.visit_expression(ast, statement.expr)?;
         let expeceted = &self.symbol_table.function_stack.last().unwrap().return_type;
         if actual != *expeceted {
@@ -83,7 +84,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTLetStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         if self.is_global_scope() {
             return None;
         }
@@ -146,7 +147,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTVarStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         if self.is_global_scope() {
             return None;
         }
@@ -190,7 +191,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTCompoundStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         self.enter_scope();
         let mut first_return = None;
         for stmnt in statement.statements.iter() {
@@ -226,7 +227,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTIfStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
         if !condition_type.is_bool() {
             self.diagnostics.borrow_mut().report_error(
@@ -263,7 +264,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTForStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         self.enter_scope();
         let range_start_type = self.visit_expression(ast, statement.range.0)?;
         let range_end_type = self.visit_expression(ast, statement.range.1)?;
@@ -291,7 +292,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         statement: &super::ASTWhileStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
         if !condition_type.is_bool() {
             self.diagnostics.borrow_mut().report_error(
@@ -308,7 +309,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         function: &super::ASTFunctionStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         self.enter_scope();
         // add arguments to scope of local variable call
         for arg in function.arguments.iter() {
@@ -332,7 +333,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         let expr_data_type = self.visit_expression(ast, expr.expr)?;
         if let Some(identifier) = self.lookup(&expr.identifier.name().to_string()) {
             match identifier {
@@ -389,7 +390,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         let mut func_return_type = DataType::Builtin(super::symbol_table::BuiltinDataType::Void);
         if expr.identifier() == "println" {
         } else if self.lookup(&expr.identifier().to_string()).is_none() {
@@ -430,7 +431,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTVariableExpression,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         match self.lookup(&expr.identifier().to_string()) {
             Some(var) => match var {
                 Symbol::Function(_func) => {
@@ -457,102 +458,105 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
     fn visit_unary_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &super::ASTUnaryExpression,
-    ) -> Option<DataType> {
-        let expr_data_type = self.visit_expression(ast, expr.expr)?;
+        unary_expr: &super::ASTUnaryExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let expr_data_type = self.visit_expression(ast, unary_expr.expr)?;
 
-        match expr.operator.kind {
+        match unary_expr.operator.kind {
             super::ASTUnaryOperatorKind::Minus => {
-                if expr_data_type.is_integer() && expr_data_type.is_floating() {
+                if !self.type_table.is_numeric(expr_data_type) {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Unary operator '-' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
             super::ASTUnaryOperatorKind::BitwiseNOT => {
-                if expr_data_type.is_integer() {
+                if !self.type_table.is_integer(expr_data_type) {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Unary operator '^' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
             super::ASTUnaryOperatorKind::LogicNot => {
-                if !expr_data_type.is_bool() {
+                if !self.type_table.is_boolean(expr_data_type) {
                     self.diagnostics.borrow_mut().report_error(
                         format!(
                             "Unary operator '!' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
         };
+        ast.query_expression_mut(expr.id).ty = Some(expr_data_type);
         return Some(expr_data_type);
     }
 
     fn visit_binary_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &super::ASTBinaryExpression,
-    ) -> Option<DataType> {
-        let left_type = self.visit_expression(ast, expr.left)?;
-        let right_type = self.visit_expression(ast, expr.right)?;
+        bin_expr: &super::ASTBinaryExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let left_type = self.visit_expression(ast, bin_expr.left)?;
+        let right_type = self.visit_expression(ast, bin_expr.right)?;
 
-        let common_data_type = DataType::get_common_type(&left_type, &right_type);
-        if common_data_type.is_none() {
+        // let common_data_type = DataType::get_common_type(&left_type, &right_type);
+        // if common_data_type.is_none() {
+        if left_type != right_type {
             self.diagnostics.borrow_mut().report_error(
                 format!(
                     "No common datatype between {} and {}",
                     left_type, right_type
                 ),
-                expr.operator.token.span.clone(),
+                bin_expr.operator.token.span.clone(),
             );
         }
 
-        match expr.operator.kind {
+        match bin_expr.operator.kind {
             ASTBinaryOperatorKind::Plus
             | ASTBinaryOperatorKind::Minus
             | ASTBinaryOperatorKind::Multiply
-            | ASTBinaryOperatorKind::Divide => return common_data_type,
+            | ASTBinaryOperatorKind::Divide => return Some(left_type), // TODO(letohg): [2025-07-19] evaluate the common type of left and right and return it
             ASTBinaryOperatorKind::EqualTo
             | ASTBinaryOperatorKind::NotEqualTo
             | ASTBinaryOperatorKind::GreaterThan
             | ASTBinaryOperatorKind::GreaterThanOrEqual
             | ASTBinaryOperatorKind::LessThan
             | ASTBinaryOperatorKind::LessThanOrEqual => {
-                return Some(DataType::Builtin(
-                    super::symbol_table::BuiltinDataType::Bool,
-                ))
+                let type_id = self
+                    .type_table
+                    .get_builtin(super::typing::BuiltinType::Bool);
+                ast.query_expression_mut(expr.id).ty = type_id;
+                return type_id;
             }
             ASTBinaryOperatorKind::LogicAND | ASTBinaryOperatorKind::LogicOR => {
-                if left_type.is_convertable_to(DataType::Builtin(
-                    crate::ast::symbol_table::BuiltinDataType::Bool,
-                )) && right_type.is_convertable_to(DataType::Builtin(
-                    crate::ast::symbol_table::BuiltinDataType::Bool,
-                )) {
-                    return Some(DataType::Builtin(
-                        crate::ast::symbol_table::BuiltinDataType::Bool,
-                    ));
+                if self.type_table.is_boolean(left_type) && self.type_table.is_boolean(right_type) {
+                    let type_id = self
+                        .type_table
+                        .get_builtin(super::typing::BuiltinType::Bool);
+                    ast.query_expression_mut(expr.id).ty = type_id;
+                    return type_id;
                 }
-
                 self.diagnostics.borrow_mut().report_error(
                     format!(
                         "Both sides need to be convertable it to bool: {} and {}",
                         left_type, right_type
                     ),
-                    expr.operator.token.span.clone(),
+                    bin_expr.operator.token.span.clone(),
                 );
 
                 return None;
@@ -560,20 +564,17 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             ASTBinaryOperatorKind::BitwiseOR
             | ASTBinaryOperatorKind::BitwiseAND
             | ASTBinaryOperatorKind::BitwiseXOR => {
-                match common_data_type {
-                    Some(ty) => {
-                        if ty.is_integer() {
-                            return Some(ty);
-                        }
-                    }
-                    _ => {}
-                };
+                // TODO(letohg): [2025-07-19] evaluate the common type of left and right and return it
+                if self.type_table.is_integer(left_type) && self.type_table.is_integer(right_type) {
+                    ast.query_expression_mut(expr.id).ty = Some(left_type);
+                    return Some(left_type);
+                }
                 self.diagnostics.borrow_mut().report_error(
                     format!(
                         "Both sides need to be of type int: {} and {}",
                         left_type, right_type
                     ),
-                    expr.operator.token.span.clone(),
+                    bin_expr.operator.token.span.clone(),
                 );
 
                 return None;
@@ -584,25 +585,27 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
     fn visit_parenthesised_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &super::ASTParenthesizedExpression,
-    ) -> Option<DataType> {
-        self.visit_expression(ast, expr.expr)
+        paren_expr: &super::ASTParenthesizedExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let type_id = self.visit_expression(ast, paren_expr.expr);
+        ast.query_expression_mut(expr.id).ty = type_id;
+        return type_id;
     }
-    fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) -> Option<DataType> {
+    fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) -> Option<TypeId> {
         None
     }
-    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<DataType> {
+    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<TypeId> {
         None
     }
-    fn visit_integer(&mut self, _integer: &i64) -> Option<DataType> {
-        Some(DataType::Builtin(super::symbol_table::BuiltinDataType::I32))
+    fn visit_integer(&mut self, _integer: &i64, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table.get_builtin(super::typing::BuiltinType::I32)
     }
-    fn visit_boolean(&mut self, _boolean: bool) -> Option<DataType> {
-        Some(DataType::Builtin(
-            super::symbol_table::BuiltinDataType::Bool,
-        ))
+    fn visit_boolean(&mut self, _boolean: bool, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table
+            .get_builtin(super::typing::BuiltinType::Bool)
     }
-    fn visit_float(&mut self, _float: &f64) -> Option<DataType> {
-        Some(DataType::Builtin(super::symbol_table::BuiltinDataType::F32))
+    fn visit_float(&mut self, _float: &f64, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table.get_builtin(super::typing::BuiltinType::F32)
     }
 }

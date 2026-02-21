@@ -44,7 +44,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(
         tokens: Vec<Token>,
-        diagnostics_colletion: Rc<RefCell<DiagnosticsColletion>>,
+        diagnostics_colletion: Rc<RefCell<DiagnosticsCollection>>,
         ast: &'a mut Ast,
     ) -> Self {
         Self {
