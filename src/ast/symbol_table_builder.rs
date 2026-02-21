@@ -1,5 +1,4 @@
 use crate::ast::symbol_table::FunctionInfo;
-
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
 use crate::ast::symbol_table::VariableInfo;
@@ -46,8 +45,8 @@ impl<'a> SymbolTableBuilder<'a> {
 
 impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_return_statement(&mut self, ast: &mut Ast, statement: &super::ASTReturnStatement) {
-        self.diagnostics.borrow_mut().report_error(
-            format!("Re&'a mut turn statement not allowed outside of functions"),
+        self.diagnostics.borrow_mut().report_custom_error(
+            format!("Return statement not allowed outside of functions"),
             // TODO(letohg): [2026-01-16] diagnostic print does not work without the +1
             super::lexer::TextSpan {
                 start: statement.keyword.span.start + 1,
@@ -66,7 +65,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
                 .unwrap(),
         }));
         if !success {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Redefinition of global identifier"),
                 statement.identifier.span.clone(),
             )
@@ -82,7 +81,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
                 .unwrap(),
         }));
         if !success {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Redefinition of global identifier"),
                 statement.identifier.span.clone(),
             )
@@ -90,7 +89,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_compound_statement(&mut self, ast: &mut Ast, statement: &super::ASTCompoundStatement) {
-        self.diagnostics.borrow_mut().report_error(
+        self.diagnostics.borrow_mut().report_custom_error(
             format!("standalone Compound statement not allowed outside of functions"),
             super::lexer::TextSpan {
                 start: statement.start_brace.span.start,
@@ -101,21 +100,21 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_if_statement(&mut self, ast: &mut Ast, statement: &super::ASTIfStatement) {
-        self.diagnostics.borrow_mut().report_error(
+        self.diagnostics.borrow_mut().report_custom_error(
             format!("If statement not allowed outside of functions"),
             statement.keyword.span.clone(),
         );
     }
 
     fn visit_for_loop_statement(&mut self, ast: &mut Ast, statement: &super::ASTForStatement) {
-        self.diagnostics.borrow_mut().report_error(
+        self.diagnostics.borrow_mut().report_custom_error(
             format!("For loop statement not allowed outside of functions"),
             statement.keyword.span.clone(),
         );
     }
 
     fn visit_while_loop_statement(&mut self, ast: &mut Ast, statement: &super::ASTWhileStatement) {
-        self.diagnostics.borrow_mut().report_error(
+        self.diagnostics.borrow_mut().report_custom_error(
             format!("While statement not allowed outside of functions"),
             statement.keyword.span.clone(),
         );
@@ -141,7 +140,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
                 .unwrap(),
         }));
         if !success {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Redefinition of global identifier"),
                 function.identifier.span.clone(),
             )

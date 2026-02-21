@@ -1,3 +1,4 @@
+use crate::ast::printer;
 use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
@@ -68,7 +69,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         let actual = self.visit_expression(ast, statement.expr)?;
         let expeceted = &self.symbol_table.function_stack.last().unwrap().return_type;
         if actual != *expeceted {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Expected return type of type {} but found {}",
                     expeceted, actual
@@ -92,7 +93,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             return None;
         }
         if self.is_identifier_in_current_scope(&statement.identifier.name()) {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Redefinition of identifier!"),
                 statement.identifier.span.clone(),
             );
@@ -102,14 +103,14 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         let shadowed_identifier = self.lookup(&statement.identifier.name());
         match shadowed_identifier {
             Some(Symbol::Function(_)) => {
-                self.diagnostics.borrow_mut().report_error(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!("Identifier already used for function name"),
                     statement.identifier.span.clone(),
                 );
                 return None;
             }
             Some(Symbol::Variable(_)) | Some(Symbol::Constant(_)) => {
-                self.diagnostics.borrow_mut().report_warning(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!("Declaration shadows identifier in outer scope"),
                     statement.identifier.span.clone(),
                 );
@@ -131,7 +132,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             .get_builtin_from_token(&statement.data_type)
             .unwrap();
         if initialization_expr_type != actual {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Initializing an {} from a {}",
                     actual, initialization_expr_type
@@ -154,7 +155,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
 
         let redefinition = self.lookup(statement.identifier.name().as_str());
         if !redefinition.is_none() {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Identifier {} already defined", statement.identifier.name()),
                 statement.identifier.span.clone(),
             );
@@ -173,7 +174,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             .get_builtin_from_token(&statement.data_type)
             .unwrap();
         if initialization_expr_type != actual {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Initializing an {} from a {}",
                     actual, initialization_expr_type
@@ -206,7 +207,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             .then(|| {
                 if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
                     if x != y {
-                        self.diagnostics.borrow_mut().report_error(
+                        self.diagnostics.borrow_mut().report_custom_error(
                             format!(
                                 "Return Type differs from previous return paths: {} and {}",
                                 x, y
@@ -236,7 +237,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
     ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
         if !self.type_table.is_boolean(condition_type) {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Condition must be of type Bool"),
                 statement.keyword.span.clone(),
             );
@@ -255,7 +256,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                 // }
 
                 if *trt != *ert {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Branches of If statement have different return types"),
                         statement.keyword.span.clone(),
                     );
@@ -276,7 +277,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         let range_end_type = self.visit_expression(ast, statement.range.1)?;
 
         if range_start_type != range_end_type {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Range start and end condition have to have same type"),
                 statement.keyword.span.clone(),
             );
@@ -300,8 +301,8 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         statement: &super::ASTWhileStatement,
     ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
-        if self.type_table.is_boolean(condition_type) {
-            self.diagnostics.borrow_mut().report_error(
+        if !self.type_table.is_boolean(condition_type) {
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Condition must be of type Bool"),
                 statement.keyword.span.clone(),
             );
@@ -347,7 +348,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         if let Some(identifier) = self.lookup(&expr.identifier.name().to_string()) {
             match identifier {
                 Symbol::Function(_) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Callables are not assignable {}", identifier.name()),
                         expr.identifier.span.clone(),
                     );
@@ -358,7 +359,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     data_type: expected,
                 }) => {
                     if expr_data_type != *expected {
-                        self.diagnostics.borrow_mut().report_error(
+                        self.diagnostics.borrow_mut().report_custom_error(
                             format!(
                                 "Cannot assign {} to identifier '{}' of type {}",
                                 expr_data_type,
@@ -372,7 +373,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     return None;
                 }
                 Symbol::Constant(_) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Cannot reassign constant"),
                         expr.identifier.span.clone(),
                     );
@@ -441,7 +442,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         match self.lookup(&expr.identifier().to_string()) {
             Some(var) => match var {
                 Symbol::Function(_func) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Callable cannot be used as variable {}", expr.identifier()),
                         expr.identifier.span.clone(),
                     );
@@ -472,7 +473,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         match unary_expr.operator.kind {
             super::ASTUnaryOperatorKind::Minus => {
                 if !self.type_table.is_numeric(expr_data_type) {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '-' can not be used on type {}",
                             expr_data_type
@@ -484,7 +485,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             }
             super::ASTUnaryOperatorKind::BitwiseNOT => {
                 if !self.type_table.is_integer(expr_data_type) {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '^' can not be used on type {}",
                             expr_data_type
@@ -496,7 +497,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             }
             super::ASTUnaryOperatorKind::LogicNot => {
                 if !self.type_table.is_boolean(expr_data_type) {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '!' can not be used on type {}",
                             expr_data_type
@@ -523,7 +524,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         // let common_data_type = DataType::get_common_type(&left_type, &right_type);
         // if common_data_type.is_none() {
         if left_type != right_type {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "No common datatype between {} and {}",
                     left_type, right_type
@@ -557,7 +558,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     ast.query_expression_mut(expr.id).ty = type_id;
                     return type_id;
                 }
-                self.diagnostics.borrow_mut().report_error(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!(
                         "Both sides need to be convertable it to bool: {} and {}",
                         left_type, right_type
@@ -575,7 +576,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     ast.query_expression_mut(expr.id).ty = Some(left_type);
                     return Some(left_type);
                 }
-                self.diagnostics.borrow_mut().report_error(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!(
                         "Both sides need to be of type int: {} and {}",
                         left_type, right_type

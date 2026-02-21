@@ -24,6 +24,7 @@ impl TypeTable {
         let mut builtins = HashMap::new();
 
         for builtin in [
+            BuiltinType::Void,
             BuiltinType::I8,
             BuiltinType::I16,
             BuiltinType::I32,
@@ -37,7 +38,6 @@ impl TypeTable {
             BuiltinType::Bool,
             BuiltinType::Char,
             BuiltinType::Str,
-            BuiltinType::Void,
         ] {
             let id = types.len();
             types.push(TypeInfo {
