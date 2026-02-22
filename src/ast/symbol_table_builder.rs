@@ -132,27 +132,48 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_assignment_expression(
         &mut self,
         ast: &mut Ast,
-        _expr: &super::ASTAssignmentExpression,
+        _assign_expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
     ) {
     }
     fn visit_function_call_expression(
         &mut self,
         ast: &mut Ast,
-        _expr: &super::ASTFunctionCallExpression,
+        _func_call_expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) {
     }
-    fn visit_variable_expression(&mut self, ast: &mut Ast, _expr: &super::ASTVariableExpression) {}
-    fn visit_unary_expression(&mut self, ast: &mut Ast, _expr: &super::ASTUnaryExpression) {}
-    fn visit_binary_expression(&mut self, ast: &mut Ast, _expr: &super::ASTBinaryExpression) {}
+    fn visit_variable_expression(
+        &mut self,
+        ast: &mut Ast,
+        _var_expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
+    ) {
+    }
+    fn visit_unary_expression(
+        &mut self,
+        ast: &mut Ast,
+        _unary_expr: &super::ASTUnaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
+    }
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        _bin_expr: &super::ASTBinaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
+    }
     fn visit_parenthesised_expression(
         &mut self,
         ast: &mut Ast,
-        _expr: &super::ASTParenthesizedExpression,
+        _paren_expr: &super::ASTParenthesizedExpression,
+        _expr: &super::ASTExpression,
     ) {
     }
     fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) {}
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) {}
-    fn visit_integer(&mut self, _integer: &i64) {}
-    fn visit_boolean(&mut self, _boolean: bool) {}
-    fn visit_float(&mut self, _float: &f64) {}
+    fn visit_integer(&mut self, _integer: &i64, _expr: &super::ASTExpression) {}
+    fn visit_boolean(&mut self, _boolean: bool, _expr: &super::ASTExpression) {}
+    fn visit_float(&mut self, _float: &f64, _expr: &super::ASTExpression) {}
 }

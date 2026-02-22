@@ -219,6 +219,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
     ) {
         self.print("Assignment:", &color::Blue);
         self.print(
@@ -238,6 +239,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) {
         self.print(
             &format!(
@@ -255,14 +257,24 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.decrease_indentation();
     }
 
-    fn visit_variable_expression(&mut self, ast: &mut Ast, expr: &super::ASTVariableExpression) {
+    fn visit_variable_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.print(
             &format!("{}  Variable: {}", Self::VARIABLE_ICON, expr.identifier()),
             &Self::TEXT_COLOR,
         );
     }
 
-    fn visit_unary_expression(&mut self, ast: &mut Ast, expr: &super::ASTUnaryExpression) {
+    fn visit_unary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTUnaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.print(
             &format!(
                 "{}  Unary: {}{}",
@@ -277,7 +289,12 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.decrease_indentation();
     }
 
-    fn visit_binary_expression(&mut self, ast: &mut Ast, expr: &super::ASTBinaryExpression) {
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTBinaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.print(
             &format!(
                 "{}  Binary: {}{}",
@@ -299,6 +316,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTParenthesizedExpression,
+        _expr: &super::ASTExpression,
     ) {
         self.print(
             &format!(
@@ -339,15 +357,15 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.print(&format!("Error: {:?}", span), &color::Red);
     }
 
-    fn visit_integer(&mut self, integer: &i64) {
+    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) {
         self.print(&format!("Integer: {}", integer), &Self::TEXT_COLOR);
     }
 
-    fn visit_boolean(&mut self, boolean: bool) {
+    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) {
         self.print(&format!("Integer: {}", boolean), &Self::TEXT_COLOR);
     }
 
-    fn visit_float(&mut self, float: &f64) {
+    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) {
         self.print(&format!("Float: {}", float), &Self::TEXT_COLOR);
     }
 }
@@ -589,6 +607,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
     ) {
         self.print_with_indent(&format!(
             "{}{}{} = ",
@@ -605,6 +624,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) {
         if expr.identifier() == "println" {
             println!("Println call with stuff...");
@@ -627,7 +647,12 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.print(&format!("{})", Fg(Self::TEXT_COLOR)));
     }
 
-    fn visit_variable_expression(&mut self, ast: &mut Ast, expr: &super::ASTVariableExpression) {
+    fn visit_variable_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.print(&format!(
             "{}{}",
             Fg(Self::VARIABLE_COLOR),
@@ -635,7 +660,12 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         ));
     }
 
-    fn visit_unary_expression(&mut self, ast: &mut Ast, expr: &super::ASTUnaryExpression) {
+    fn visit_unary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTUnaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.print(&format!(
             "{}{}",
             Fg(Self::TEXT_COLOR),
@@ -644,7 +674,12 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.visit_expression(ast, expr.expr);
     }
 
-    fn visit_binary_expression(&mut self, ast: &mut Ast, expr: &super::ASTBinaryExpression) {
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTBinaryExpression,
+        _expr: &super::ASTExpression,
+    ) {
         self.visit_expression(ast, expr.left);
         self.add_whitespace();
         self.print(&format!(
@@ -660,6 +695,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTParenthesizedExpression,
+        _expr: &super::ASTExpression,
     ) {
         self.print(&format!("{}(", Fg(Self::TEXT_COLOR)));
         self.visit_expression(ast, expr.expr);
@@ -691,14 +727,14 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
     }
 
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> () {}
-    fn visit_integer(&mut self, integer: &i64) {
+    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), integer));
     }
-    fn visit_boolean(&mut self, boolean: bool) {
+    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) {
         self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), boolean));
     }
 
-    fn visit_float(&mut self, float: &f64) {
+    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) {
         self.print(&format!("{}{}f", Fg(Self::FLOAT_COLOR), float));
     }
 }

@@ -227,6 +227,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         self.visit_expression(ast, expr.expr);
         for scope in self.scopes.iter_mut().rev() {
@@ -242,6 +243,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         // TODO(letohg): [2025-07-19] support for builtin functions
         if expr.identifier() == "println" {
@@ -294,6 +296,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         self.result = self.get_identifier_in_scope(&expr.identifier.span.literal);
         // self.result = Some(*self.variables.get(expr.identifier()).unwrap());
@@ -304,6 +307,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTUnaryExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         self.visit_expression(ast, expr.expr);
         self.result = Some(match expr.operator.kind {
@@ -317,6 +321,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTBinaryExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         self.visit_expression(ast, expr.left);
         let left = self.result.unwrap();
@@ -345,9 +350,10 @@ impl ASTVisitor<Option<()>> for ASTSolver {
     fn visit_parenthesised_expression(
         &mut self,
         ast: &mut Ast,
-        expr: &super::ASTParenthesizedExpression,
+        paren_expr: &super::ASTParenthesizedExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
-        return self.visit_expression(ast, expr.expr);
+        return self.visit_expression(ast, paren_expr.expr);
     }
 
     fn visit_binary_operator(&mut self, _op: &ASTBinaryOperator) -> Option<()> {
@@ -358,15 +364,15 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_integer(&mut self, integer: &i64) -> Option<()> {
+    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(integer.clone() as f64);
         None
     }
-    fn visit_boolean(&mut self, boolean: bool) -> Option<()> {
+    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(boolean as i64 as f64);
         None
     }
-    fn visit_float(&mut self, float: &f64) -> Option<()> {
+    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(float.clone());
         None
     }
