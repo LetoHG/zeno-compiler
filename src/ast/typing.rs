@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::ast::lexer::{Token, TokenKind};
+
 pub type TypeId = usize;
 
 pub enum TypeKind {
@@ -51,6 +53,10 @@ impl TypeTable {
         self.builtins.get(&builtin).cloned()
     }
 
+    pub fn get_builtin_from_token(&self, token: &Token) -> Option<TypeId> {
+        BuiltinType::from_token(token).and_then(|b| self.get_builtin(b))
+    }
+
     pub fn is_boolean(&self, type_id: TypeId) -> bool {
         matches!(
             self.types.get(type_id).map(|t| &t.kind),
@@ -93,4 +99,26 @@ pub enum BuiltinType {
     Char,
     Str,
     Void,
+}
+
+impl BuiltinType {
+    pub fn from_token(token: &Token) -> Option<Self> {
+        Some(match &token.kind {
+            TokenKind::I8 => Self::I8,
+            TokenKind::I16 => Self::I16,
+            TokenKind::I32 => Self::I32,
+            TokenKind::I64 => Self::I64,
+            TokenKind::U8 => Self::U8,
+            TokenKind::U16 => Self::U16,
+            TokenKind::U32 => Self::U32,
+            TokenKind::U64 => Self::U64,
+            TokenKind::F32 => Self::F32,
+            TokenKind::F64 => Self::F64,
+            TokenKind::Bool => Self::Bool,
+            TokenKind::Char => Self::Char,
+            TokenKind::Str => Self::Str,
+            TokenKind::Void => Self::Void,
+            _ => return None,
+        })
+    }
 }

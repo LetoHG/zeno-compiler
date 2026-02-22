@@ -1,24 +1,30 @@
-use crate::{
-    ast::{
-        symbol_table::{
-            DataType, FunctionInfo, StructDataMember, Symbol, SymbolTable, VariableInfo,
-        },
-        Ast,
-    },
-    diagnostics::{self, DiagnosticsCollectionCell},
-};
+use crate::ast::symbol_table::FunctionInfo;
+
+use crate::ast::symbol_table::Symbol;
+use crate::ast::symbol_table::SymbolTable;
+use crate::ast::symbol_table::VariableInfo;
+use crate::ast::typing::TypeId;
+use crate::ast::typing::TypeTable;
+use crate::ast::Ast;
+use crate::diagnostics::DiagnosticsCollectionCell;
 
 use super::ASTVisitor;
 
 pub struct SymbolTableBuilder<'a> {
     symbol_table: &'a mut SymbolTable,
+    type_table: &'a mut TypeTable,
     diagnostics: DiagnosticsCollectionCell,
 }
 
 impl<'a> SymbolTableBuilder<'a> {
-    pub fn new(diagnostics: DiagnosticsCollectionCell, symbol_table: &'a mut SymbolTable) -> Self {
+    pub fn new(
+        diagnostics: DiagnosticsCollectionCell,
+        symbol_table: &'a mut SymbolTable,
+        type_table: &'a mut TypeTable,
+    ) -> Self {
         Self {
             symbol_table,
+            type_table,
             diagnostics,
         }
     }
@@ -41,7 +47,7 @@ impl<'a> SymbolTableBuilder<'a> {
 impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_return_statement(&mut self, ast: &mut Ast, statement: &super::ASTReturnStatement) {
         self.diagnostics.borrow_mut().report_error(
-            format!("Return statement not allowed outside of functions"),
+            format!("Re&'a mut turn statement not allowed outside of functions"),
             // TODO(letohg): [2026-01-16] diagnostic print does not work without the +1
             super::lexer::TextSpan {
                 start: statement.keyword.span.start + 1,
@@ -54,7 +60,10 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_let_statement(&mut self, ast: &mut Ast, statement: &super::ASTLetStatement) {
         let success = self.declare_global_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
         if !success {
             self.diagnostics.borrow_mut().report_error(
@@ -67,7 +76,10 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_var_statement(&mut self, ast: &mut Ast, statement: &super::ASTVarStatement) {
         let success = self.declare_global_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
         if !success {
             self.diagnostics.borrow_mut().report_error(
@@ -110,16 +122,23 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
 
     fn visit_function_statement(&mut self, ast: &mut Ast, function: &super::ASTFunctionStatement) {
-        let mut argument_types: Vec<DataType> = Vec::new();
+        let mut argument_types: Vec<TypeId> = Vec::new();
         // add arguments to scope of local variable call
         for arg in function.arguments.iter() {
             // argument_types.push(arg.identifier.span.literal.clone());
-            argument_types.push(DataType::from_token(&arg.data_type));
+            argument_types.push(
+                self.type_table
+                    .get_builtin_from_token(&arg.data_type)
+                    .unwrap(),
+            );
         }
         let success = self.declare_global_identifier(Symbol::Function(FunctionInfo {
             name: function.identifier.name(),
             parameters: argument_types,
-            return_type: DataType::from_token(&function.return_type),
+            return_type: self
+                .type_table
+                .get_builtin_from_token(&function.return_type)
+                .unwrap(),
         }));
         if !success {
             self.diagnostics.borrow_mut().report_error(

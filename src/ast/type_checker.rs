@@ -1,4 +1,3 @@
-use crate::ast::symbol_table::DataType;
 use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
@@ -13,15 +12,19 @@ use super::{ASTStatementKind, ASTVisitor};
 pub struct TypeChecker<'a> {
     symbol_table: &'a mut SymbolTable,
     diagnostics: DiagnosticsCollectionCell,
-    type_table: TypeTable,
+    type_table: &'a mut TypeTable,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(diagnostics: DiagnosticsCollectionCell, symbol_table: &'a mut SymbolTable) -> Self {
+    pub fn new(
+        diagnostics: DiagnosticsCollectionCell,
+        symbol_table: &'a mut SymbolTable,
+        type_table: &'a mut TypeTable,
+    ) -> Self {
         Self {
             symbol_table,
             diagnostics,
-            type_table: TypeTable::new(),
+            type_table,
         }
     }
 
@@ -117,20 +120,17 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
-        let initialization_expr_type: DataType =
-            self.visit_expression(ast, statement.initializer)?;
-        let actual = DataType::from_token(&statement.data_type);
-        if initialization_expr_type.is_convertable_to(actual.clone()) {
-            // self.diagnostics.borrow_mut().report_warning(
-            //     format!(
-            //         "Implicit conversion from {} to {}",
-            //         initialization_expr_type, actual,
-            //     ),
-            //     statement.identifier.span.clone(),
-            // );
-        } else {
+        let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
+        let actual = self
+            .type_table
+            .get_builtin_from_token(&statement.data_type)
+            .unwrap();
+        if initialization_expr_type != actual {
             self.diagnostics.borrow_mut().report_error(
                 format!(
                     "Initializing an {} from a {}",
@@ -162,19 +162,17 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
-        let initialization_expr_type = self.visit_expression(ast, statement.initializer)?;
-        let actual = DataType::from_token(&statement.data_type);
-        if initialization_expr_type.is_convertable_to(actual.clone()) {
-            // self.diagnostics.borrow_mut().report_warning(
-            //     format!(
-            //         "Implicit conversion from {} to {}",
-            //         initialization_expr_type, actual,
-            //     ),
-            //     statement.identifier.span.clone(),
-            // );
-        } else {
+        let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
+        let actual = self
+            .type_table
+            .get_builtin_from_token(&statement.data_type)
+            .unwrap();
+        if initialization_expr_type != actual {
             self.diagnostics.borrow_mut().report_error(
                 format!(
                     "Initializing an {} from a {}",
@@ -193,31 +191,39 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         statement: &super::ASTCompoundStatement,
     ) -> Option<TypeId> {
         self.enter_scope();
-        let mut first_return = None;
+        let mut first_return: Option<TypeId> = None;
         for stmnt in statement.statements.iter() {
-            let return_type = self.visit_statement(ast, *stmnt);
+            let return_type: Option<TypeId> = self.visit_statement(ast, *stmnt);
 
-            // let nested = ast.query_statement(*stmnt);
-            // match nested.kind {
-            //     ASTStatementKind::Return(_)
-            //     | ASTStatementKind::Compound(_)
-            //     | ASTStatementKind::For(_)
-            //     | ASTStatementKind::While(_)
-            //     | ASTStatementKind::If(_) => {
-            //         if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
-            //             if x != y {
-            //                 println!(
-            //                     "Return Type differs from previous return paths: {} {}",
-            //                     x, y
-            //                 );
-            //             }
-            //             // no assignment here
-            //         } else if first_return.is_none() {
-            //             first_return = return_type;
-            //         }
-            //     }
-            //     _ => {}
-            // }
+            matches!(
+                ast.query_statement(*stmnt).kind,
+                ASTStatementKind::Return(_)
+                    | ASTStatementKind::Compound(_)
+                    | ASTStatementKind::For(_)
+                    | ASTStatementKind::While(_)
+                    | ASTStatementKind::If(_)
+            )
+            .then(|| {
+                if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
+                    if x != y {
+                        self.diagnostics.borrow_mut().report_error(
+                            format!(
+                                "Return Type differs from previous return paths: {} and {}",
+                                x, y
+                            ),
+                            // ast.query_statement(*stmnt).span.clone(),
+                            super::lexer::TextSpan {
+                                start: 0,
+                                end: 0,
+                                literal: "".to_string(),
+                            },
+                        );
+                    }
+                    // no assignment here
+                } else if first_return.is_none() {
+                    first_return = return_type;
+                }
+            });
         }
         self.exit_scope();
         first_return
@@ -229,7 +235,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         statement: &super::ASTIfStatement,
     ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
-        if !condition_type.is_bool() {
+        if !self.type_table.is_boolean(condition_type) {
             self.diagnostics.borrow_mut().report_error(
                 format!("Condition must be of type Bool"),
                 statement.keyword.span.clone(),
@@ -294,7 +300,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         statement: &super::ASTWhileStatement,
     ) -> Option<TypeId> {
         let condition_type = self.visit_expression(ast, statement.condition)?;
-        if !condition_type.is_bool() {
+        if self.type_table.is_boolean(condition_type) {
             self.diagnostics.borrow_mut().report_error(
                 format!("Condition must be of type Bool"),
                 statement.keyword.span.clone(),
@@ -316,12 +322,14 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             // argument_types.push(arg.identifier.span.literal.clone());
             self.declare_local_identifier(Symbol::Variable(VariableInfo {
                 name: arg.identifier.name(),
-                data_type: DataType::from_token(&arg.data_type),
+                data_type: self.type_table.get_builtin_from_token(&arg.data_type)?,
             }));
         }
         self.symbol_table.function_stack.push(FunctionContext {
             name: function.identifier.name(),
-            return_type: DataType::from_token(&function.return_type),
+            return_type: self
+                .type_table
+                .get_builtin_from_token(&function.return_type)?,
         });
         self.visit_statement(ast, function.body);
         self.symbol_table.function_stack.pop();
@@ -333,6 +341,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<TypeId> {
         let expr_data_type = self.visit_expression(ast, expr.expr)?;
         if let Some(identifier) = self.lookup(&expr.identifier.name().to_string()) {
@@ -348,15 +357,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     name: _,
                     data_type: expected,
                 }) => {
-                    if expr_data_type.is_convertable_to(expected.clone()) {
-                        // self.diagnostics.borrow_mut().report_warning(
-                        //     format!(
-                        //         "Implicit conversion from {} to {}",
-                        //         expr_data_type, expected,
-                        //     ),
-                        //     expr.identifier.span.clone(),
-                        // );
-                    } else {
+                    if expr_data_type != *expected {
                         self.diagnostics.borrow_mut().report_error(
                             format!(
                                 "Cannot assign {} to identifier '{}' of type {}",
@@ -390,8 +391,12 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<TypeId> {
-        let mut func_return_type = DataType::Builtin(super::symbol_table::BuiltinDataType::Void);
+        let mut func_return_type = self
+            .type_table
+            .get_builtin(super::typing::BuiltinType::Void)
+            .unwrap();
         if expr.identifier() == "println" {
         } else if self.lookup(&expr.identifier().to_string()).is_none() {
             self.diagnostics
@@ -431,6 +436,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
         &mut self,
         ast: &mut Ast,
         expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<TypeId> {
         match self.lookup(&expr.identifier().to_string()) {
             Some(var) => match var {
