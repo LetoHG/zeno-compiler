@@ -1,5 +1,7 @@
 use std::{collections::HashMap, ops::Not};
 
+use crate::ast::Ast;
+
 use super::{
     lexer::{TextSpan, TokenKind},
     ASTBinaryOperator, ASTBinaryOperatorKind, ASTFunctionStatement, ASTReturnStatement, ASTVisitor,
@@ -21,24 +23,30 @@ impl ASTSolver {
         }
     }
 
-    pub fn solve(&mut self) {
-        if let Some(entry_point) = self.functions.get("main") {
-            self.result = None;
-            self.visit_function_call_expression(&super::ASTFunctionCallExpression {
-                identifier: super::lexer::Token {
-                    kind: TokenKind::Identifier,
-                    span: TextSpan {
-                        start: 0,
-                        end: 0,
-                        literal: "main".to_string(),
-                    },
-                },
-                arguments: vec![],
-            });
-            self.print_result();
-        } else {
-            println!("No entry point to program. `func main()` is missing");
+    pub fn init(&mut self, ast: &mut Ast) {
+        for statement in ast.top_level_statements.clone().iter() {
+            self.visit_statement(ast, *statement);
         }
+    }
+
+    pub fn solve(&mut self) {
+        // if let Some(_) = self.functions.get("main") {
+        //     self.result = None;
+        //     self.visit_function_call_expression(&super::ASTFunctionCallExpression {
+        //         identifier: super::lexer::Token {
+        //             kind: TokenKind::Identifier,
+        //             span: TextSpan {
+        //                 start: 0,
+        //                 end: 0,
+        //                 literal: "main".to_string(),
+        //             },
+        //         },
+        //         arguments: vec![],
+        //     });
+        //     self.print_result();
+        // } else {
+        //     println!("No entry point to program. `func main()` is missing");
+        // }
     }
 
     pub fn print_result(&self) {
@@ -82,17 +90,28 @@ impl ASTSolver {
 }
 
 impl ASTVisitor<Option<()>> for ASTSolver {
-    fn visit_return_statement(&mut self, statement: &ASTReturnStatement) -> Option<()> {
-        self.visit_expression(&statement.expr);
+    fn visit_return_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &ASTReturnStatement,
+    ) -> Option<()> {
+        self.visit_expression(ast, statement.expr);
         Some(())
     }
 
-    fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) -> Option<()> {
-        for statement in statement.statements.iter() {
-            match statement.kind {
-                super::ASTStatementKind::Return(_) => return self.visit_statement(statement),
+    fn visit_compound_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTCompoundStatement,
+    ) -> Option<()> {
+        for statement_id in statement.statements.iter() {
+            let stmnt = ast.query_statement(*statement_id);
+            match stmnt.kind {
+                super::ASTStatementKind::Return(_) => {
+                    return self.visit_statement(ast, *statement_id)
+                }
                 _ => {
-                    let ret = self.visit_statement(statement);
+                    let ret = self.visit_statement(ast, *statement_id);
                     if ret.is_some() {
                         return ret;
                     }
@@ -102,34 +121,50 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_let_statement(&mut self, statement: &super::ASTLetStatement) -> Option<()> {
-        self.visit_expression(&statement.initializer);
+    fn visit_let_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTLetStatement,
+    ) -> Option<()> {
+        self.visit_expression(ast, statement.initializer);
         self.add_identifier_to_scope(&statement.identifier.span.literal, self.result.unwrap());
         None
     }
 
-    fn visit_var_statement(&mut self, statement: &super::ASTVarStatement) -> Option<()> {
-        self.visit_expression(&statement.initializer);
+    fn visit_var_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTVarStatement,
+    ) -> Option<()> {
+        self.visit_expression(ast, statement.initializer);
         self.add_identifier_to_scope(&statement.identifier.span.literal, self.result.unwrap());
         None
     }
 
-    fn visit_if_statement(&mut self, statement: &super::ASTIfStatement) -> Option<()> {
-        self.visit_expression(&statement.condition);
+    fn visit_if_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTIfStatement,
+    ) -> Option<()> {
+        self.visit_expression(ast, statement.condition);
         let condition = self.result.unwrap();
 
         if condition != 0.0 {
-            return self.visit_statement(&statement.then_branch);
+            return self.visit_statement(ast, statement.then_branch);
         } else if let Some(else_branch) = &statement.else_branch {
-            return self.visit_statement(&else_branch.else_branch);
+            return self.visit_statement(ast, else_branch.else_branch);
         }
         None
     }
 
-    fn visit_for_loop_statement(&mut self, statement: &super::ASTForStatement) -> Option<()> {
-        self.visit_expression(&statement.range.0);
+    fn visit_for_loop_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTForStatement,
+    ) -> Option<()> {
+        self.visit_expression(ast, statement.range.0);
         let range_start = self.result.unwrap() as i64;
-        self.visit_expression(&statement.range.1);
+        self.visit_expression(ast, statement.range.1);
         let range_end = self.result.unwrap() as i64 + 1;
         let loop_var = statement.loop_variable.span.literal.clone();
 
@@ -137,7 +172,7 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         self.add_identifier_to_scope(&loop_var, range_start as f64);
 
         for i in range_start..range_end {
-            let ret = self.visit_statement(&statement.body);
+            let ret = self.visit_statement(ast, statement.body);
             for scope in self.scopes.iter_mut().rev() {
                 if let Some(value) = scope.get_mut(&loop_var) {
                     *value = i as f64;
@@ -153,16 +188,20 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_while_loop_statement(&mut self, statement: &super::ASTWhileStatement) -> Option<()> {
+    fn visit_while_loop_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTWhileStatement,
+    ) -> Option<()> {
         self.enter_scope(Scope::new());
         loop {
-            self.visit_expression(&statement.condition);
+            self.visit_expression(ast, statement.condition);
             let condition = self.result.unwrap() as i64 != 0;
             if !condition {
                 break;
             }
 
-            let ret = self.visit_statement(&statement.body);
+            let ret = self.visit_statement(ast, statement.body);
             if ret.is_some() {
                 self.leave_scope();
                 return ret;
@@ -172,7 +211,11 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) -> Option<()> {
+    fn visit_function_statement(
+        &mut self,
+        ast: &mut Ast,
+        function: &super::ASTFunctionStatement,
+    ) -> Option<()> {
         self.functions
             .insert(function.identifier.span.literal.clone(), function.clone());
 
@@ -180,8 +223,13 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) -> Option<()> {
-        self.visit_expression(&expr.expr);
+    fn visit_assignment_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTAssignmentExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.visit_expression(ast, expr.expr);
         for scope in self.scopes.iter_mut().rev() {
             if let Some(value) = scope.get_mut(&expr.identifier.span.literal) {
                 *value = self.result.unwrap();
@@ -193,12 +241,14 @@ impl ASTVisitor<Option<()>> for ASTSolver {
 
     fn visit_function_call_expression(
         &mut self,
+        ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
         // TODO(letohg): [2025-07-19] support for builtin functions
         if expr.identifier() == "println" {
             for arg_expr in expr.arguments.iter() {
-                self.visit_expression(&arg_expr);
+                self.visit_expression(ast, *arg_expr);
                 // let arg_name = func_arg.identifier.span.literal.clone();
 
                 println!("println: {}", self.result.unwrap());
@@ -221,35 +271,45 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         // evaluate arguments and add them to scope
         // arguments.push(expr.identifier.span.literal.clone());
         for (arg_expr, func_arg) in expr.arguments.iter().zip(func.arguments.iter()) {
-            self.visit_expression(&arg_expr);
+            self.visit_expression(ast, *arg_expr);
             let arg_name = func_arg.identifier.span.literal.clone();
 
             arguments.insert(arg_name, self.result.unwrap());
         }
         self.enter_scope(arguments);
 
-        // todo: that check should be done before
-        if let super::ASTStatementKind::Compound(statement) = &func.body.kind {
-            for statement in statement.statements.iter() {
-                let result = self.visit_statement(statement);
-                if result.is_some() {
-                    return result;
-                }
-            }
-        }
+        // // todo: that check should be done before
+        // if let super::ASTStatementKind::Compound(statement) = &func.body.kind {
+        //     for statement in statement.statements.iter() {
+        //         let result = self.visit_statement(statement);
+        //         if result.is_some() {
+        //             return result;
+        //         }
+        //     }
+        // }
 
         self.leave_scope();
         None
     }
 
-    fn visit_variable_expression(&mut self, expr: &super::ASTVariableExpression) -> Option<()> {
+    fn visit_variable_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTVariableExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
         self.result = self.get_identifier_in_scope(&expr.identifier.span.literal);
         // self.result = Some(*self.variables.get(expr.identifier()).unwrap());
         None
     }
 
-    fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) -> Option<()> {
-        self.visit_expression(&expr.expr);
+    fn visit_unary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTUnaryExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.visit_expression(ast, expr.expr);
         self.result = Some(match expr.operator.kind {
             super::ASTUnaryOperatorKind::BitwiseNOT => (self.result.unwrap() as i64).not() as f64,
             super::ASTUnaryOperatorKind::LogicNot => ((self.result.unwrap() == 0.0) as i64) as f64,
@@ -257,10 +317,15 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         });
         None
     }
-    fn visit_binary_expression(&mut self, expr: &super::ASTBinaryExpression) -> Option<()> {
-        self.visit_expression(&expr.left);
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTBinaryExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.visit_expression(ast, expr.left);
         let left = self.result.unwrap();
-        self.visit_expression(&expr.right);
+        self.visit_expression(ast, expr.right);
         let right = self.result.unwrap();
         self.result = Some(match expr.operator.kind {
             ASTBinaryOperatorKind::Plus => left + right,
@@ -284,28 +349,30 @@ impl ASTVisitor<Option<()>> for ASTSolver {
 
     fn visit_parenthesised_expression(
         &mut self,
-        expr: &super::ASTParenthesizedExpression,
+        ast: &mut Ast,
+        paren_expr: &super::ASTParenthesizedExpression,
+        _expr: &super::ASTExpression,
     ) -> Option<()> {
-        return self.visit_expression(&expr.expr);
+        return self.visit_expression(ast, paren_expr.expr);
     }
 
-    fn visit_binary_operator(&mut self, op: &ASTBinaryOperator) -> Option<()> {
+    fn visit_binary_operator(&mut self, _op: &ASTBinaryOperator) -> Option<()> {
         None
     }
 
-    fn visit_error(&mut self, span: &super::lexer::TextSpan) -> Option<()> {
+    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<()> {
         None
     }
 
-    fn visit_integer(&mut self, integer: &i64) -> Option<()> {
+    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(integer.clone() as f64);
         None
     }
-    fn visit_boolean(&mut self, boolean: bool) -> Option<()> {
+    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(boolean as i64 as f64);
         None
     }
-    fn visit_float(&mut self, float: &f64) -> Option<()> {
+    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) -> Option<()> {
         self.result = Some(float.clone());
         None
     }

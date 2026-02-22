@@ -8,14 +8,54 @@ pub enum DiagnosticKind {
     Warning,
 }
 
+impl DiagnosticKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DiagnosticKind::Error => "Error",
+            DiagnosticKind::Warning => "Warning",
+        }
+    }
+}
+
+pub enum DiagnosticMessage {
+    UnexpectedToken {
+        expected: TokenKind,
+        found: TokenKind,
+    },
+    ExpectedExpression {
+        found: TokenKind,
+    },
+    UndefinedFunction {
+        name: String,
+    },
+    UndefinedVariable {
+        name: String,
+    },
+    UndefinedIdentifier {
+        name: String,
+    },
+    NotACallable {
+        name: String,
+    },
+    TypeMismatch {
+        expected: String,
+        found: String,
+    },
+    NumberOfFunctionArgumentsMismatch {
+        expected: usize,
+        found: usize,
+    },
+    Custom(String),
+}
+
 pub struct Diagnostic {
-    pub(crate) message: String,
+    pub(crate) message: DiagnosticMessage,
     pub(crate) kind: DiagnosticKind,
     pub(crate) span: TextSpan,
 }
 
 impl Diagnostic {
-    pub fn new(message: String, kind: DiagnosticKind, span: TextSpan) -> Self {
+    pub fn new(message: DiagnosticMessage, kind: DiagnosticKind, span: TextSpan) -> Self {
         Self {
             message,
             kind,
@@ -24,15 +64,15 @@ impl Diagnostic {
     }
 }
 
-pub struct DiagnosticsColletion {
+pub struct DiagnosticsCollection {
     pub diagnostics: Vec<Diagnostic>,
     pub count_errors: usize,
     pub count_warnings: usize,
 }
 
-pub type DiagnosticsColletionCell = Rc<RefCell<DiagnosticsColletion>>;
+pub type DiagnosticsCollectionCell = Rc<RefCell<DiagnosticsCollection>>;
 
-impl DiagnosticsColletion {
+impl DiagnosticsCollection {
     pub fn new() -> Self {
         Self {
             diagnostics: vec![],
@@ -47,55 +87,84 @@ impl DiagnosticsColletion {
         self.count_warnings = 0;
     }
 
-    pub fn report_error(&mut self, message: String, span: TextSpan) {
+    pub fn report_error(&mut self, message: DiagnosticMessage, span: TextSpan) {
         self.count_errors += 1;
         self.diagnostics
             .push(Diagnostic::new(message, DiagnosticKind::Error, span));
     }
 
-    pub fn report_warning(&mut self, message: String, span: TextSpan) {
+    pub fn report_custom_warning(&mut self, message: String, span: TextSpan) {
         self.count_warnings += 1;
-        self.diagnostics
-            .push(Diagnostic::new(message, DiagnosticKind::Warning, span));
+        self.diagnostics.push(Diagnostic::new(
+            DiagnosticMessage::Custom(message),
+            DiagnosticKind::Warning,
+            span,
+        ));
+    }
+
+    pub fn report_custom_error(&mut self, message: String, span: TextSpan) {
+        self.count_errors += 1;
+        self.diagnostics.push(Diagnostic::new(
+            DiagnosticMessage::Custom(message),
+            DiagnosticKind::Error,
+            span,
+        ));
     }
 
     pub fn report_unexpected_token(&mut self, expected_tokenkind: &TokenKind, found_token: &Token) {
         self.report_error(
-            format!(
-                "Expected <{}>, but found <{}>",
-                expected_tokenkind, found_token.kind
-            ),
+            DiagnosticMessage::UnexpectedToken {
+                expected: expected_tokenkind.clone(),
+                found: found_token.kind.clone(),
+            },
             found_token.span.clone(),
         );
     }
     pub fn report_expected_expression(&mut self, found_token: &Token) {
         self.report_error(
-            format!("Expected expression, but found <{}>", found_token.kind),
+            DiagnosticMessage::ExpectedExpression {
+                found: found_token.kind.clone(),
+            },
             found_token.span.clone(),
         );
     }
 
     pub fn report_undefined_function(&mut self, span: TextSpan) {
-        self.report_error(format!("Undefined function: {}", span.literal), span);
+        self.report_error(
+            DiagnosticMessage::UndefinedFunction {
+                name: span.literal.clone(),
+            },
+            span,
+        );
     }
 
     pub fn report_undefined_variable(&mut self, span: TextSpan) {
-        self.report_error(format!("Not found in this scope"), span);
+        self.report_error(
+            DiagnosticMessage::UndefinedVariable {
+                name: span.literal.clone(),
+            },
+            span,
+        );
     }
 
     pub fn report_undefined_identifier(&mut self, span: TextSpan) {
         self.report_error(
-            format!("No identifier named '{}' in scope", span.literal),
+            DiagnosticMessage::UndefinedIdentifier {
+                name: span.literal.clone(),
+            },
             span,
         );
     }
 
     pub fn report_not_a_callable(&mut self, span: TextSpan) {
         self.report_error(
-            format!("Identifier '{}' is not callable", span.literal),
+            DiagnosticMessage::NotACallable {
+                name: span.literal.clone(),
+            },
             span,
         );
     }
+
     pub fn report_type_mismatch(
         &mut self,
         span: TextSpan,
@@ -103,10 +172,10 @@ impl DiagnosticsColletion {
         expected_type: String,
     ) {
         self.report_error(
-            format!(
-                "Type mismatch. Expected <{}>, but found <{}>",
-                expected_type, found_type
-            ),
+            DiagnosticMessage::TypeMismatch {
+                expected: expected_type,
+                found: found_type,
+            },
             span,
         );
     }
@@ -118,10 +187,7 @@ impl DiagnosticsColletion {
         found: usize,
     ) {
         self.report_error(
-            format!(
-                "Function {} expects {} arguments but {} were given",
-                span.literal, expected, found
-            ),
+            DiagnosticMessage::NumberOfFunctionArgumentsMismatch { expected, found },
             span,
         );
     }

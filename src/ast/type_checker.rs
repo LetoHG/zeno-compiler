@@ -1,27 +1,38 @@
-use crate::ast::symbol_table::DataType;
+use crate::ast::printer;
 use crate::ast::symbol_table::FunctionContext;
 use crate::ast::symbol_table::Symbol;
 use crate::ast::symbol_table::SymbolTable;
 use crate::ast::symbol_table::VariableInfo;
-use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsColletionCell};
+use crate::ast::typing::TypeId;
+use crate::ast::typing::TypeTable;
+use crate::ast::Ast;
+use crate::{ast::ASTBinaryOperatorKind, diagnostics::DiagnosticsCollectionCell};
 
 use super::{ASTStatementKind, ASTVisitor};
 
 pub struct TypeChecker<'a> {
     symbol_table: &'a mut SymbolTable,
-    diagnostics: DiagnosticsColletionCell,
+    diagnostics: DiagnosticsCollectionCell,
+    type_table: &'a mut TypeTable,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(diagnostics: DiagnosticsColletionCell, symbol_table: &'a mut SymbolTable) -> Self {
+    pub fn new(
+        diagnostics: DiagnosticsCollectionCell,
+        symbol_table: &'a mut SymbolTable,
+        type_table: &'a mut TypeTable,
+    ) -> Self {
         Self {
             symbol_table,
             diagnostics,
+            type_table,
         }
     }
 
-    pub fn analyze(&mut self, ast: &super::Ast) {
-        ast.visit(self);
+    pub fn analyze(&mut self, ast: &mut super::Ast) {
+        for id in ast.top_level_statements.clone().iter() {
+            self.visit_statement(ast, *id);
+        }
     }
 
     fn enter_scope(&mut self) {
@@ -32,9 +43,6 @@ impl<'a> TypeChecker<'a> {
         self.symbol_table.exit_scope();
     }
 
-    fn declare_global_identifier(&mut self, symbol: Symbol) {
-        self.symbol_table.declare_global_identifier(symbol)
-    }
     fn declare_local_identifier(&mut self, symbol: Symbol) {
         self.symbol_table.declare_local_identifier(symbol)
     }
@@ -52,15 +60,16 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
-impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
+impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
     fn visit_return_statement(
         &mut self,
+        ast: &mut Ast,
         statement: &super::ASTReturnStatement,
-    ) -> Option<DataType> {
-        let actual = self.visit_expression(&statement.expr)?;
+    ) -> Option<TypeId> {
+        let actual = self.visit_expression(ast, statement.expr)?;
         let expeceted = &self.symbol_table.function_stack.last().unwrap().return_type;
         if actual != *expeceted {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Expected return type of type {} but found {}",
                     expeceted, actual
@@ -75,12 +84,16 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         Some(actual)
     }
 
-    fn visit_let_statement(&mut self, statement: &super::ASTLetStatement) -> Option<DataType> {
+    fn visit_let_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTLetStatement,
+    ) -> Option<TypeId> {
         if self.is_global_scope() {
             return None;
         }
         if self.is_identifier_in_current_scope(&statement.identifier.name()) {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Redefinition of identifier!"),
                 statement.identifier.span.clone(),
             );
@@ -90,14 +103,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         let shadowed_identifier = self.lookup(&statement.identifier.name());
         match shadowed_identifier {
             Some(Symbol::Function(_)) => {
-                self.diagnostics.borrow_mut().report_error(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!("Identifier already used for function name"),
                     statement.identifier.span.clone(),
                 );
                 return None;
             }
             Some(Symbol::Variable(_)) | Some(Symbol::Constant(_)) => {
-                self.diagnostics.borrow_mut().report_warning(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!("Declaration shadows identifier in outer scope"),
                     statement.identifier.span.clone(),
                 );
@@ -108,20 +121,18 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Constant(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
-        let initialization_expr_type: DataType = self.visit_expression(&statement.initializer)?;
-        let actual = DataType::from_token(&statement.data_type);
-        if initialization_expr_type.is_convertable_to(actual.clone()) {
-            // self.diagnostics.borrow_mut().report_warning(
-            //     format!(
-            //         "Implicit conversion from {} to {}",
-            //         initialization_expr_type, actual,
-            //     ),
-            //     statement.identifier.span.clone(),
-            // );
-        } else {
-            self.diagnostics.borrow_mut().report_error(
+        let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
+        let actual = self
+            .type_table
+            .get_builtin_from_token(&statement.data_type)
+            .unwrap();
+        if initialization_expr_type != actual {
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Initializing an {} from a {}",
                     actual, initialization_expr_type
@@ -133,14 +144,18 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         None
     }
 
-    fn visit_var_statement(&mut self, statement: &super::ASTVarStatement) -> Option<DataType> {
+    fn visit_var_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTVarStatement,
+    ) -> Option<TypeId> {
         if self.is_global_scope() {
             return None;
         }
 
         let redefinition = self.lookup(statement.identifier.name().as_str());
         if !redefinition.is_none() {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Identifier {} already defined", statement.identifier.name()),
                 statement.identifier.span.clone(),
             );
@@ -148,20 +163,18 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
         self.declare_local_identifier(Symbol::Variable(VariableInfo {
             name: statement.identifier.name(),
-            data_type: DataType::from_token(&statement.data_type),
+            data_type: self
+                .type_table
+                .get_builtin_from_token(&statement.data_type)
+                .unwrap(),
         }));
-        let initialization_expr_type = self.visit_expression(&statement.initializer)?;
-        let actual = DataType::from_token(&statement.data_type);
-        if initialization_expr_type.is_convertable_to(actual.clone()) {
-            // self.diagnostics.borrow_mut().report_warning(
-            //     format!(
-            //         "Implicit conversion from {} to {}",
-            //         initialization_expr_type, actual,
-            //     ),
-            //     statement.identifier.span.clone(),
-            // );
-        } else {
-            self.diagnostics.borrow_mut().report_error(
+        let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
+        let actual = self
+            .type_table
+            .get_builtin_from_token(&statement.data_type)
+            .unwrap();
+        if initialization_expr_type != actual {
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "Initializing an {} from a {}",
                     actual, initialization_expr_type
@@ -175,54 +188,65 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_compound_statement(
         &mut self,
+        ast: &mut Ast,
         statement: &super::ASTCompoundStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         self.enter_scope();
-        let mut first_return = None;
-        for statement in statement.statements.iter() {
-            let return_type = self.visit_statement(statement);
+        let mut first_return: Option<TypeId> = None;
+        for stmnt in statement.statements.iter() {
+            let return_type: Option<TypeId> = self.visit_statement(ast, *stmnt);
 
-            match statement.kind {
+            matches!(
+                ast.query_statement(*stmnt).kind,
                 ASTStatementKind::Return(_)
-                | ASTStatementKind::Compound(_)
-                | ASTStatementKind::For(_)
-                | ASTStatementKind::While(_)
-                | ASTStatementKind::If(_) => {
-                    if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
-                        if x != y {
-                            println!(
-                                "Return Type differs from previous return paths: {} {}",
+                    | ASTStatementKind::Compound(_)
+                    | ASTStatementKind::For(_)
+                    | ASTStatementKind::While(_)
+                    | ASTStatementKind::If(_)
+            )
+            .then(|| {
+                if let (Some(x), Some(y)) = (first_return.as_ref(), return_type.as_ref()) {
+                    if x != y {
+                        self.diagnostics.borrow_mut().report_custom_error(
+                            format!(
+                                "Return Type differs from previous return paths: {} and {}",
                                 x, y
-                            );
-                        }
-                        // no assignment here
-                    } else if first_return.is_none() {
-                        first_return = return_type;
+                            ),
+                            // ast.query_statement(*stmnt).span.clone(),
+                            super::lexer::TextSpan {
+                                start: 0,
+                                end: 0,
+                                literal: "".to_string(),
+                            },
+                        );
                     }
+                    // no assignment here
+                } else if first_return.is_none() {
+                    first_return = return_type;
                 }
-                _ => {}
-            }
+            });
         }
         self.exit_scope();
         first_return
     }
 
-    fn visit_if_statement(&mut self, statement: &super::ASTIfStatement) -> Option<DataType> {
-        let condition_type = self.visit_expression(&statement.condition)?;
-        match condition_type {
-            DataType::Bool => {}
-            _ => {
-                self.diagnostics.borrow_mut().report_error(
-                    format!("Condition must be of type Bool"),
-                    statement.keyword.span.clone(),
-                );
-            }
-        };
+    fn visit_if_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTIfStatement,
+    ) -> Option<TypeId> {
+        let condition_type = self.visit_expression(ast, statement.condition)?;
+        if !self.type_table.is_boolean(condition_type) {
+            self.diagnostics.borrow_mut().report_custom_error(
+                format!("Condition must be of type Bool"),
+                statement.keyword.span.clone(),
+            );
+        }
 
-        let then_return_type = self.visit_statement(&statement.then_branch);
+        let then_return_type = self.visit_statement(ast, statement.then_branch);
 
         if let Some(else_branch) = &statement.else_branch {
-            let else_return_type = self.visit_statement(&else_branch.else_branch);
+            let else_return_type = self.visit_statement(ast, else_branch.else_branch);
             if let (Some(trt), Some(ert)) = (then_return_type.as_ref(), else_return_type.as_ref()) {
                 // if *ert == DataType::Void {
                 //     return then_return_type;
@@ -232,7 +256,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                 // }
 
                 if *trt != *ert {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Branches of If statement have different return types"),
                         statement.keyword.span.clone(),
                     );
@@ -243,13 +267,17 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         None
     }
 
-    fn visit_for_loop_statement(&mut self, statement: &super::ASTForStatement) -> Option<DataType> {
+    fn visit_for_loop_statement(
+        &mut self,
+        ast: &mut Ast,
+        statement: &super::ASTForStatement,
+    ) -> Option<TypeId> {
         self.enter_scope();
-        let range_start_type = self.visit_expression(&statement.range.0)?;
-        let range_end_type = self.visit_expression(&statement.range.1)?;
+        let range_start_type = self.visit_expression(ast, statement.range.0)?;
+        let range_end_type = self.visit_expression(ast, statement.range.1)?;
 
         if range_start_type != range_end_type {
-            self.diagnostics.borrow_mut().report_error(
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!("Range start and end condition have to have same type"),
                 statement.keyword.span.clone(),
             );
@@ -261,7 +289,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             data_type: range_start_type, // TODO(letohg): [2025-07-19] evaluate the
                                          // datatype of statement.range (it has to be an integer)
         }));
-        let _return_type = self.visit_statement(&statement.body);
+        let _return_type = self.visit_statement(ast, statement.body);
         self.exit_scope();
         // return_type
         None
@@ -269,41 +297,42 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_while_loop_statement(
         &mut self,
+        ast: &mut Ast,
         statement: &super::ASTWhileStatement,
-    ) -> Option<DataType> {
-        let condition_type = self.visit_expression(&statement.condition)?;
-        match condition_type {
-            DataType::Bool => {}
-            _ => {
-                self.diagnostics.borrow_mut().report_error(
-                    format!("Condition must be of type Bool"),
-                    statement.keyword.span.clone(),
-                );
-            }
-        };
+    ) -> Option<TypeId> {
+        let condition_type = self.visit_expression(ast, statement.condition)?;
+        if !self.type_table.is_boolean(condition_type) {
+            self.diagnostics.borrow_mut().report_custom_error(
+                format!("Condition must be of type Bool"),
+                statement.keyword.span.clone(),
+            );
+        }
 
-        self.visit_statement(&statement.body);
+        self.visit_statement(ast, statement.body);
         None
     }
 
     fn visit_function_statement(
         &mut self,
+        ast: &mut Ast,
         function: &super::ASTFunctionStatement,
-    ) -> Option<DataType> {
+    ) -> Option<TypeId> {
         self.enter_scope();
         // add arguments to scope of local variable call
         for arg in function.arguments.iter() {
             // argument_types.push(arg.identifier.span.literal.clone());
             self.declare_local_identifier(Symbol::Variable(VariableInfo {
                 name: arg.identifier.name(),
-                data_type: DataType::from_token(&arg.data_type),
+                data_type: self.type_table.get_builtin_from_token(&arg.data_type)?,
             }));
         }
         self.symbol_table.function_stack.push(FunctionContext {
             name: function.identifier.name(),
-            return_type: DataType::from_token(&function.return_type),
+            return_type: self
+                .type_table
+                .get_builtin_from_token(&function.return_type)?,
         });
-        self.visit_statement(&function.body);
+        self.visit_statement(ast, function.body);
         self.symbol_table.function_stack.pop();
         self.exit_scope();
         None
@@ -311,13 +340,15 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_assignment_expression(
         &mut self,
+        ast: &mut Ast,
         expr: &super::ASTAssignmentExpression,
-    ) -> Option<DataType> {
-        let expr_data_type = self.visit_expression(&expr.expr)?;
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let expr_data_type = self.visit_expression(ast, expr.expr)?;
         if let Some(identifier) = self.lookup(&expr.identifier.name().to_string()) {
             match identifier {
                 Symbol::Function(_) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Callables are not assignable {}", identifier.name()),
                         expr.identifier.span.clone(),
                     );
@@ -327,16 +358,8 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     name: _,
                     data_type: expected,
                 }) => {
-                    if expr_data_type.is_convertable_to(expected.clone()) {
-                        // self.diagnostics.borrow_mut().report_warning(
-                        //     format!(
-                        //         "Implicit conversion from {} to {}",
-                        //         expr_data_type, expected,
-                        //     ),
-                        //     expr.identifier.span.clone(),
-                        // );
-                    } else {
-                        self.diagnostics.borrow_mut().report_error(
+                    if expr_data_type != *expected {
+                        self.diagnostics.borrow_mut().report_custom_error(
                             format!(
                                 "Cannot assign {} to identifier '{}' of type {}",
                                 expr_data_type,
@@ -350,7 +373,7 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
                     return None;
                 }
                 Symbol::Constant(_) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Cannot reassign constant"),
                         expr.identifier.span.clone(),
                     );
@@ -367,9 +390,14 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
 
     fn visit_function_call_expression(
         &mut self,
+        ast: &mut Ast,
         expr: &super::ASTFunctionCallExpression,
-    ) -> Option<DataType> {
-        let mut func_return_type = DataType::Void;
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let mut func_return_type = self
+            .type_table
+            .get_builtin(super::typing::BuiltinType::Void)
+            .unwrap();
         if expr.identifier() == "println" {
         } else if self.lookup(&expr.identifier().to_string()).is_none() {
             self.diagnostics
@@ -400,19 +428,21 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             }
         }
         for arg in expr.arguments.iter() {
-            self.visit_expression(arg);
+            self.visit_expression(ast, *arg);
         }
         Some(func_return_type)
     }
 
     fn visit_variable_expression(
         &mut self,
+        ast: &mut Ast,
         expr: &super::ASTVariableExpression,
-    ) -> Option<DataType> {
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
         match self.lookup(&expr.identifier().to_string()) {
             Some(var) => match var {
                 Symbol::Function(_func) => {
-                    self.diagnostics.borrow_mut().report_error(
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!("Callable cannot be used as variable {}", expr.identifier()),
                         expr.identifier.span.clone(),
                     );
@@ -432,89 +462,108 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
         // Some(DataType::Void)
     }
 
-    fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) -> Option<DataType> {
-        let expr_data_type = self.visit_expression(&expr.expr)?;
+    fn visit_unary_expression(
+        &mut self,
+        ast: &mut Ast,
+        unary_expr: &super::ASTUnaryExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let expr_data_type = self.visit_expression(ast, unary_expr.expr)?;
 
-        match expr.operator.kind {
+        match unary_expr.operator.kind {
             super::ASTUnaryOperatorKind::Minus => {
-                if expr_data_type.is_integer() && expr_data_type.is_floating() {
-                    self.diagnostics.borrow_mut().report_error(
+                if !self.type_table.is_numeric(expr_data_type) {
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '-' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
             super::ASTUnaryOperatorKind::BitwiseNOT => {
-                if expr_data_type.is_integer() {
-                    self.diagnostics.borrow_mut().report_error(
+                if !self.type_table.is_integer(expr_data_type) {
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '^' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
             super::ASTUnaryOperatorKind::LogicNot => {
-                if expr_data_type != DataType::Bool {
-                    self.diagnostics.borrow_mut().report_error(
+                if !self.type_table.is_boolean(expr_data_type) {
+                    self.diagnostics.borrow_mut().report_custom_error(
                         format!(
                             "Unary operator '!' can not be used on type {}",
                             expr_data_type
                         ),
-                        expr.operator.token.span.clone(),
+                        unary_expr.operator.token.span.clone(),
                     );
                     return None;
                 }
             }
         };
+        ast.query_expression_mut(expr.id).ty = Some(expr_data_type);
         return Some(expr_data_type);
     }
 
-    fn visit_binary_expression(&mut self, expr: &super::ASTBinaryExpression) -> Option<DataType> {
-        let left_type = self.visit_expression(&expr.left)?;
-        let right_type = self.visit_expression(&expr.right)?;
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        bin_expr: &super::ASTBinaryExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let left_type = self.visit_expression(ast, bin_expr.left)?;
+        let right_type = self.visit_expression(ast, bin_expr.right)?;
 
-        let common_data_type = DataType::get_common_type(&left_type, &right_type);
-        if common_data_type.is_none() {
-            self.diagnostics.borrow_mut().report_error(
+        // let common_data_type = DataType::get_common_type(&left_type, &right_type);
+        // if common_data_type.is_none() {
+        if left_type != right_type {
+            self.diagnostics.borrow_mut().report_custom_error(
                 format!(
                     "No common datatype between {} and {}",
                     left_type, right_type
                 ),
-                expr.operator.token.span.clone(),
+                bin_expr.operator.token.span.clone(),
             );
         }
 
-        match expr.operator.kind {
+        match bin_expr.operator.kind {
             ASTBinaryOperatorKind::Plus
             | ASTBinaryOperatorKind::Minus
             | ASTBinaryOperatorKind::Multiply
-            | ASTBinaryOperatorKind::Divide => return common_data_type,
+            | ASTBinaryOperatorKind::Divide => return Some(left_type), // TODO(letohg): [2025-07-19] evaluate the common type of left and right and return it
             ASTBinaryOperatorKind::EqualTo
             | ASTBinaryOperatorKind::NotEqualTo
             | ASTBinaryOperatorKind::GreaterThan
             | ASTBinaryOperatorKind::GreaterThanOrEqual
             | ASTBinaryOperatorKind::LessThan
-            | ASTBinaryOperatorKind::LessThanOrEqual => return Some(DataType::Bool),
+            | ASTBinaryOperatorKind::LessThanOrEqual => {
+                let type_id = self
+                    .type_table
+                    .get_builtin(super::typing::BuiltinType::Bool);
+                ast.query_expression_mut(expr.id).ty = type_id;
+                return type_id;
+            }
             ASTBinaryOperatorKind::LogicAND | ASTBinaryOperatorKind::LogicOR => {
-                if left_type.is_convertable_to(DataType::Bool)
-                    && right_type.is_convertable_to(DataType::Bool)
-                {
-                    return Some(DataType::Bool);
+                if self.type_table.is_boolean(left_type) && self.type_table.is_boolean(right_type) {
+                    let type_id = self
+                        .type_table
+                        .get_builtin(super::typing::BuiltinType::Bool);
+                    ast.query_expression_mut(expr.id).ty = type_id;
+                    return type_id;
                 }
-
-                self.diagnostics.borrow_mut().report_error(
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!(
                         "Both sides need to be convertable it to bool: {} and {}",
                         left_type, right_type
                     ),
-                    expr.operator.token.span.clone(),
+                    bin_expr.operator.token.span.clone(),
                 );
 
                 return None;
@@ -522,48 +571,48 @@ impl<'a> ASTVisitor<Option<DataType>> for TypeChecker<'a> {
             ASTBinaryOperatorKind::BitwiseOR
             | ASTBinaryOperatorKind::BitwiseAND
             | ASTBinaryOperatorKind::BitwiseXOR => {
-                match common_data_type {
-                    Some(ty) => {
-                        if ty.is_integer() {
-                            return Some(ty);
-                        }
-                    }
-                    _ => {}
-                };
-                self.diagnostics.borrow_mut().report_error(
+                // TODO(letohg): [2025-07-19] evaluate the common type of left and right and return it
+                if self.type_table.is_integer(left_type) && self.type_table.is_integer(right_type) {
+                    ast.query_expression_mut(expr.id).ty = Some(left_type);
+                    return Some(left_type);
+                }
+                self.diagnostics.borrow_mut().report_custom_error(
                     format!(
                         "Both sides need to be of type int: {} and {}",
                         left_type, right_type
                     ),
-                    expr.operator.token.span.clone(),
+                    bin_expr.operator.token.span.clone(),
                 );
 
                 return None;
             }
-            _ => {}
         };
-        return Some(right_type);
     }
 
     fn visit_parenthesised_expression(
         &mut self,
-        expr: &super::ASTParenthesizedExpression,
-    ) -> Option<DataType> {
-        self.visit_expression(&expr.expr)
+        ast: &mut Ast,
+        paren_expr: &super::ASTParenthesizedExpression,
+        expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
+        let type_id = self.visit_expression(ast, paren_expr.expr);
+        ast.query_expression_mut(expr.id).ty = type_id;
+        return type_id;
     }
-    fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) -> Option<DataType> {
+    fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) -> Option<TypeId> {
         None
     }
-    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<DataType> {
+    fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<TypeId> {
         None
     }
-    fn visit_integer(&mut self, _integer: &i64) -> Option<DataType> {
-        Some(DataType::I32)
+    fn visit_integer(&mut self, _integer: &i64, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table.get_builtin(super::typing::BuiltinType::I32)
     }
-    fn visit_boolean(&mut self, _boolean: bool) -> Option<DataType> {
-        Some(DataType::Bool)
+    fn visit_boolean(&mut self, _boolean: bool, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table
+            .get_builtin(super::typing::BuiltinType::Bool)
     }
-    fn visit_float(&mut self, _float: &f64) -> Option<DataType> {
-        Some(DataType::F32)
+    fn visit_float(&mut self, _float: &f64, _expr: &super::ASTExpression) -> Option<TypeId> {
+        self.type_table.get_builtin(super::typing::BuiltinType::F32)
     }
 }

@@ -21,6 +21,39 @@ impl<'a> DiagnosticsPrinter<'a> {
         }
     }
 
+    fn format_diagnostic_message(&self, diagnostic: &Diagnostic) -> String {
+        match &diagnostic.message {
+            super::DiagnosticMessage::UnexpectedToken { expected, found } => {
+                format!("Expected token '{}', but found '{}'", expected, found)
+            }
+            super::DiagnosticMessage::ExpectedExpression { found } => {
+                format!("Expected an expression, but found '{}'", found)
+            }
+            super::DiagnosticMessage::UndefinedFunction { name } => {
+                format!("Undefined function '{}'", name)
+            }
+            super::DiagnosticMessage::UndefinedVariable { name } => {
+                format!("Undefined variable '{}'", name)
+            }
+            super::DiagnosticMessage::UndefinedIdentifier { name } => {
+                format!("Undefined identifier '{}'", name)
+            }
+            super::DiagnosticMessage::NotACallable { name } => {
+                format!("'{}' is not callable", name)
+            }
+            super::DiagnosticMessage::TypeMismatch { expected, found } => format!(
+                "Type mismatch: expected '{}', but found '{}'",
+                expected, found
+            ),
+            super::DiagnosticMessage::NumberOfFunctionArgumentsMismatch { expected, found } => {
+                format!(
+                    "Number of function arguments mismatch: expected {}, but found {}",
+                    expected, found
+                )
+            }
+            super::DiagnosticMessage::Custom(msg) => msg.clone(),
+        }
+    }
     // let b = 7 - elepant + aligator;
     //             ^^^^^^^ Not found in this scope
     pub fn stringify_diagnostic(&self, diagnostic: &Diagnostic) -> String {
@@ -38,20 +71,54 @@ impl<'a> DiagnosticsPrinter<'a> {
         };
 
         let line_number_str = format!("{:2} | ", line_number);
-        let whitespace = " ".repeat(col + line_number_str.len());
+        let line_prefix = "   | ";
+        let whitespace = " ".repeat(col);
+        let message = self.format_diagnostic_message(diagnostic);
 
+        // Example output:
+        // error[E012]: type mismatch
+        //   --> main.my:12:15
+        //    |
+        // 12 |     let x: u8 = 300;
+        //    |               ^^^ expected `u8`, found integer literal
+        //    |
+        //    = note: `u8` values must be between 0 and 255
         format!(
-            // "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{}\n{whitespace}|\n{whitespace}+-- {}{}",
-            "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{} {} ({}:{}){}",
-            color::Fg(color::Blue),
-            color::Fg(color::Reset),
+            "{}{}{}:{}\n  --> {}:{}:{}\n{}{}\n{}{}{}\n{}{}{}{}{} {}{}",
             color::Fg(message_color.as_ref()),
-            "^".repeat(symbol_len),
-            diagnostic.message,
+            diagnostic.kind.as_str(),
+            color::Fg(color::Reset),
+            "message placeholder",
+            self.source_text.get_filename(),
             line_number,
             col,
-            color::Fg(color::Reset)
+            color::Fg(color::Blue),
+            line_prefix,
+            line_number_str,
+            color::Fg(color::Reset),
+            line,
+            color::Fg(color::Blue),
+            line_prefix,
+            whitespace,
+            color::Fg(message_color.as_ref()),
+            "^".repeat(symbol_len),
+            message,
+            color::Fg(color::Reset),
         )
         .to_string()
+
+        // format!(
+        //     // "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{}\n{whitespace}|\n{whitespace}+-- {}{}",
+        //     "{}{line_number_str}{}{prefix}{error_symbol}{suffix}\n{whitespace}{}{} {} ({}:{}){}",
+        //     color::Fg(color::Blue),
+        //     color::Fg(color::Reset),
+        //     color::Fg(message_color.as_ref()),
+        //     "^".repeat(symbol_len),
+        //     message,
+        //     line_number,
+        //     col,
+        //     color::Fg(color::Reset)
+        // )
+        // .to_string()
     }
 }

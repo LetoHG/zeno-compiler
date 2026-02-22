@@ -1,19 +1,31 @@
 pub struct SourceText {
-    input: String,
+    filename: String,
+    content: String,
 }
 
 impl SourceText {
     pub fn new(input: String) -> Self {
-        Self { input }
+        Self {
+            filename: "string".to_string(),
+            content: input,
+        }
     }
 
     pub fn from_file(filename: &str) -> Self {
         match std::fs::read_to_string(filename) {
-            Ok(input) => Self { input },
+            Ok(input) => Self {
+                filename: filename.to_string(),
+                content: input,
+            },
             _ => Self {
-                input: "".to_string(),
+                filename: filename.to_string(),
+                content: "".to_string(),
             },
         }
+    }
+
+    pub fn get_filename(&self) -> String {
+        self.filename.clone()
     }
 
     pub fn get_location(&self, index: usize) -> (String, usize) {
@@ -22,8 +34,8 @@ impl SourceText {
     }
 
     pub fn get_column(&self, index: usize) -> usize {
-        if self.input[0..index].lines().count() > 0 {
-            self.input[0..index].lines().last().unwrap().len()
+        if self.content[0..index].lines().count() > 0 {
+            self.content[0..index].lines().last().unwrap().len()
         } else {
             index
         }
@@ -33,14 +45,14 @@ impl SourceText {
         if index == 0 {
             return 1;
         }
-        self.input[0..index].lines().count()
+        self.content[0..index].lines().count()
     }
 
     pub fn get_line(&self, row: usize) -> String {
-        if self.input.lines().count() > 0 {
-            self.input.lines().nth(row).unwrap().to_string()
+        if self.content.lines().count() > 0 {
+            self.content.lines().nth(row).unwrap().to_string()
         } else {
-            self.input.clone()
+            self.content.clone()
         }
     }
 }

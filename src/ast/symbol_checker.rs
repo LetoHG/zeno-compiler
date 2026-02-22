@@ -46,7 +46,7 @@ impl<'a> TypeChecker<'a> {
 }
 
 impl ASTVisitor<()> for TypeChecker {
-    fn visit_return_statement(&mut self, statement: &super::ASTReturnStatement) {
+    fn visit_return_statement(&mut self, ast: &mut Ast, statement: &super::ASTReturnStatement) {
         self.visit_expression(&statement.expr);
     }
 
@@ -55,12 +55,12 @@ impl ASTVisitor<()> for TypeChecker {
         self.visit_expression(&statement.initializer);
     }
 
-    fn visit_var_statement(&mut self, statement: &super::ASTVarStatement) {
+    fn visit_var_statement(&mut self, ast: &mut Ast, statement: &super::ASTVarStatement) {
         self.add_identifier_to_scope(&statement.identifier.span.literal);
         self.visit_expression(&statement.initializer);
     }
 
-    fn visit_compound_statement(&mut self, statement: &super::ASTCompoundStatement) {
+    fn visit_compound_statement(&mut self, ast: &mut Ast, statement: &super::ASTCompoundStatement) {
         self.enter_scope(Vec::new());
         for statement in statement.statements.iter() {
             self.visit_statement(statement);
@@ -68,18 +68,18 @@ impl ASTVisitor<()> for TypeChecker {
         self.leave_scope();
     }
 
-    fn visit_if_statement(&mut self, statement: &super::ASTIfStatement) {
+    fn visit_if_statement(&mut self, ast: &mut Ast, statement: &super::ASTIfStatement) {
         self.visit_statement(&statement.then_branch);
         if let Some(else_branch) = &statement.else_branch {
             self.visit_statement(&else_branch.else_branch);
         }
     }
 
-    fn visit_for_loop_statement(&mut self, statement: &super::ASTForStatement) {}
+    fn visit_for_loop_statement(&mut self, ast: &mut Ast, statement: &super::ASTForStatement) {}
 
-    fn visit_while_loop_statement(&mut self, statement: &super::ASTWhileStatement) {}
+    fn visit_while_loop_statement(&mut self, ast: &mut Ast, statement: &super::ASTWhileStatement) {}
 
-    fn visit_function_statement(&mut self, function: &super::ASTFunctionStatement) {
+    fn visit_function_statement(&mut self, ast: &mut Ast, function: &super::ASTFunctionStatement) {
         self.add_identifier_to_scope(&function.identifier.span.literal);
 
         let mut arguments_names: Vec<String> = Vec::new();
@@ -107,9 +107,18 @@ impl ASTVisitor<()> for TypeChecker {
         self.leave_scope();
     }
 
-    fn visit_assignment_expression(&mut self, expr: &super::ASTAssignmentExpression) {}
+    fn visit_assignment_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTAssignmentExpression,
+    ) {
+    }
 
-    fn visit_function_call_expression(&mut self, expr: &super::ASTFunctionCallExpression) {
+    fn visit_function_call_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTFunctionCallExpression,
+    ) {
         if !self.check_identifier_in_scope(&expr.identifier().to_string()) {
             self.diagnostics
                 .borrow_mut()
@@ -133,7 +142,7 @@ impl ASTVisitor<()> for TypeChecker {
         }
     }
 
-    fn visit_variable_expression(&mut self, expr: &super::ASTVariableExpression) {
+    fn visit_variable_expression(&mut self, ast: &mut Ast, expr: &super::ASTVariableExpression) {
         if !self.check_identifier_in_scope(&expr.identifier().to_string()) {
             self.diagnostics
                 .borrow_mut()
@@ -141,16 +150,20 @@ impl ASTVisitor<()> for TypeChecker {
         }
     }
 
-    fn visit_unary_expression(&mut self, expr: &super::ASTUnaryExpression) {
+    fn visit_unary_expression(&mut self, ast: &mut Ast, expr: &super::ASTUnaryExpression) {
         self.visit_expression(&expr.expr);
     }
 
-    fn visit_binary_expression(&mut self, expr: &super::ASTBinaryExpression) {
+    fn visit_binary_expression(&mut self, ast: &mut Ast, expr: &super::ASTBinaryExpression) {
         self.visit_expression(&expr.left);
         self.visit_expression(&expr.right);
     }
 
-    fn visit_parenthesised_expression(&mut self, expr: &super::ASTParenthesizedExpression) {
+    fn visit_parenthesised_expression(
+        &mut self,
+        ast: &mut Ast,
+        expr: &super::ASTParenthesizedExpression,
+    ) {
         self.visit_expression(&expr.expr);
     }
 
