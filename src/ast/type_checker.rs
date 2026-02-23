@@ -529,7 +529,7 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
                     "No common datatype between {} and {}",
                     left_type, right_type
                 ),
-                bin_expr.operator.token.span.clone(),
+                expr.span(ast),
             );
         }
 
@@ -605,14 +605,29 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> Option<TypeId> {
         None
     }
-    fn visit_integer(&mut self, _integer: &i64, _expr: &super::ASTExpression) -> Option<TypeId> {
+    fn visit_integer(
+        &mut self,
+        _ast: &mut Ast,
+        _int_expr: &super::ASTIntegerExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
         self.type_table.get_builtin(super::typing::BuiltinType::I32)
     }
-    fn visit_boolean(&mut self, _boolean: bool, _expr: &super::ASTExpression) -> Option<TypeId> {
+    fn visit_boolean(
+        &mut self,
+        _ast: &mut Ast,
+        _bool_expr: &super::ASTBooleanExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
         self.type_table
             .get_builtin(super::typing::BuiltinType::Bool)
     }
-    fn visit_float(&mut self, _float: &f64, _expr: &super::ASTExpression) -> Option<TypeId> {
+    fn visit_float(
+        &mut self,
+        _ast: &mut Ast,
+        _float_expr: &super::ASTFloatingExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<TypeId> {
         self.type_table.get_builtin(super::typing::BuiltinType::F32)
     }
 }

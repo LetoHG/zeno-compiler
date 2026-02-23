@@ -364,16 +364,32 @@ impl ASTVisitor<Option<()>> for ASTSolver {
         None
     }
 
-    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) -> Option<()> {
-        self.result = Some(integer.clone() as f64);
+    fn visit_integer(
+        &mut self,
+        _ast: &mut Ast,
+        int_expr: &super::ASTIntegerExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.result = Some(int_expr.value.clone() as f64);
         None
     }
-    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) -> Option<()> {
-        self.result = Some(boolean as i64 as f64);
+    fn visit_boolean(
+        &mut self,
+        _ast: &mut Ast,
+        bool_expr: &super::ASTBooleanExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.result = Some(bool_expr.value as i64 as f64);
         None
     }
-    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) -> Option<()> {
-        self.result = Some(float.clone());
+
+    fn visit_float(
+        &mut self,
+        _ast: &mut Ast,
+        float_expr: &super::ASTFloatingExpression,
+        _expr: &super::ASTExpression,
+    ) -> Option<()> {
+        self.result = Some(float_expr.value.clone());
         None
     }
 }

@@ -357,16 +357,31 @@ impl ASTVisitor<()> for ASTTreePrinter {
         self.print(&format!("Error: {:?}", span), &color::Red);
     }
 
-    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) {
-        self.print(&format!("Integer: {}", integer), &Self::TEXT_COLOR);
+    fn visit_integer(
+        &mut self,
+        _ast: &mut Ast,
+        int_expr: &super::ASTIntegerExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("Integer: {}", int_expr.value), &Self::TEXT_COLOR);
     }
 
-    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) {
-        self.print(&format!("Integer: {}", boolean), &Self::TEXT_COLOR);
+    fn visit_boolean(
+        &mut self,
+        _ast: &mut Ast,
+        bool_expr: &super::ASTBooleanExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("Bool: {}", bool_expr.value), &Self::TEXT_COLOR);
     }
 
-    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) {
-        self.print(&format!("Float: {}", float), &Self::TEXT_COLOR);
+    fn visit_float(
+        &mut self,
+        _ast: &mut Ast,
+        float_expr: &super::ASTFloatingExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("Float: {}", float_expr.value), &Self::TEXT_COLOR);
     }
 }
 
@@ -727,14 +742,30 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
     }
 
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) -> () {}
-    fn visit_integer(&mut self, integer: &i64, _expr: &super::ASTExpression) {
-        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), integer));
-    }
-    fn visit_boolean(&mut self, boolean: bool, _expr: &super::ASTExpression) {
-        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), boolean));
+    fn visit_integer(
+        &mut self,
+        _ast: &mut Ast,
+        int_expr: &super::ASTIntegerExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), int_expr.value));
     }
 
-    fn visit_float(&mut self, float: &f64, _expr: &super::ASTExpression) {
-        self.print(&format!("{}{}f", Fg(Self::FLOAT_COLOR), float));
+    fn visit_boolean(
+        &mut self,
+        _ast: &mut Ast,
+        bool_expr: &super::ASTBooleanExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("{}{}", Fg(Self::INTEGER_COLOR), bool_expr.value));
+    }
+
+    fn visit_float(
+        &mut self,
+        _ast: &mut Ast,
+        float_expr: &super::ASTFloatingExpression,
+        _expr: &super::ASTExpression,
+    ) {
+        self.print(&format!("{}{}f", Fg(Self::FLOAT_COLOR), float_expr.value));
     }
 }

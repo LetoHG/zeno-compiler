@@ -191,7 +191,23 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     }
     fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) {}
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) {}
-    fn visit_integer(&mut self, _integer: &i64, _expr: &super::ASTExpression) {}
-    fn visit_boolean(&mut self, _boolean: bool, _expr: &super::ASTExpression) {}
-    fn visit_float(&mut self, _float: &f64, _expr: &super::ASTExpression) {}
+
+     fn visit_integer(
+        &mut self,
+        _ast: &mut Ast,
+        _int_expr: &super::ASTIntegerExpression,
+        _expr: &super::ASTExpression,
+     ){}
+    fn visit_boolean(
+        &mut self,
+        _ast: &mut Ast,
+        _bool_expr: &super::ASTBooleanExpression,
+        _expr: &super::ASTExpression,
+    ){}
+    fn visit_float(
+        &mut self,
+        _ast: &mut Ast,
+        _float_expr: &super::ASTFloatingExpression,
+        _expr: &super::ASTExpression,
+    ){}
 }

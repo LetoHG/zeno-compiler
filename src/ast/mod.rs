@@ -185,15 +185,24 @@ impl Ast {
         self.add_expr(ASTExpressionKind::Error(span))
     }
 
-    fn integer(&mut self, i: i64) -> Option<&ASTExpression> {
-        self.add_expr(ASTExpressionKind::IntegerLiteral(i))
+    fn integer(&mut self, i: i64, token: Token) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::IntegerLiteral(ASTIntegerExpression {
+            value: i,
+            token,
+        }))
     }
-    fn float(&mut self, f: f64) -> Option<&ASTExpression> {
-        self.add_expr(ASTExpressionKind::FloatingLiteral(f))
+    fn float(&mut self, f: f64, token: Token) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::FloatingLiteral(ASTFloatingExpression {
+            value: f,
+            token,
+        }))
     }
 
-    fn boolean(&mut self, b: bool) -> Option<&ASTExpression> {
-        self.add_expr(ASTExpressionKind::BooleanLiteral(b))
+    fn boolean(&mut self, b: bool, token: Token) -> Option<&ASTExpression> {
+        self.add_expr(ASTExpressionKind::BooleanLiteral(ASTBooleanExpression {
+            value: b,
+            token,
+        }))
     }
 
     fn identifier(&mut self, token: Token) -> Option<&ASTExpression> {
@@ -266,9 +275,9 @@ pub trait ASTVisitor<T> {
     fn do_visit_expression(&mut self, ast: &mut Ast, expr_id: ExprId) -> T {
         let expr = ast.query_expression(expr_id).clone();
         match &expr.kind {
-            ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(i, &expr),
-            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(b.clone(), &expr),
-            ASTExpressionKind::FloatingLiteral(f) => self.visit_float(f, &expr),
+            ASTExpressionKind::IntegerLiteral(i) => self.visit_integer(ast, i, &expr),
+            ASTExpressionKind::BooleanLiteral(b) => self.visit_boolean(ast, b, &expr),
+            ASTExpressionKind::FloatingLiteral(f) => self.visit_float(ast, f, &expr),
             ASTExpressionKind::Variable(var_expr) => {
                 self.visit_variable_expression(ast, var_expr, &expr)
             }
@@ -348,13 +357,29 @@ pub trait ASTVisitor<T> {
     fn visit_binary_operator(&mut self, op: &ASTBinaryOperator) -> T;
 
     fn visit_error(&mut self, span: &TextSpan) -> T;
-    fn visit_integer(&mut self, integer: &i64, expr: &ASTExpression) -> T;
-    fn visit_boolean(&mut self, boolean: bool, expr: &ASTExpression) -> T;
-    fn visit_float(&mut self, float: &f64, expr: &ASTExpression) -> T;
+
+    fn visit_integer(
+        &mut self,
+        ast: &mut Ast,
+        int_expr: &ASTIntegerExpression,
+        expr: &ASTExpression,
+    ) -> T;
+    fn visit_boolean(
+        &mut self,
+        ast: &mut Ast,
+        bool_expr: &ASTBooleanExpression,
+        expr: &ASTExpression,
+    ) -> T;
+    fn visit_float(
+        &mut self,
+        ast: &mut Ast,
+        float_expr: &ASTFloatingExpression,
+        expr: &ASTExpression,
+    ) -> T;
 }
 
 #[derive(Clone)]
-enum ASTStatementKind {
+pub enum ASTStatementKind {
     Expr(ExprId),
     Let(ASTLetStatement),
     Var(ASTVarStatement),
@@ -555,11 +580,11 @@ impl ASTStatement {
 }
 
 #[derive(Clone, PartialEq)]
-enum ASTExpressionKind {
-    IntegerLiteral(i64),
-    BooleanLiteral(bool),
-    FloatingLiteral(f64),
-    StringLiteral(String),
+pub enum ASTExpressionKind {
+    IntegerLiteral(ASTIntegerExpression),
+    BooleanLiteral(ASTBooleanExpression),
+    FloatingLiteral(ASTFloatingExpression),
+    StringLiteral(ASTStringExpression),
     Unary(ASTUnaryExpression),
     Binary(ASTBinaryExpression),
     Parenthesized(ASTParenthesizedExpression),
@@ -580,6 +605,75 @@ impl ASTExpression {
     fn new(kind: ASTExpressionKind, id: ExprId) -> Self {
         Self { kind, id, ty: None }
     }
+
+    pub fn span(&self, ast: &Ast) -> TextSpan {
+        match &self.kind {
+            ASTExpressionKind::IntegerLiteral(expr) => expr.token.span.clone(),
+            ASTExpressionKind::BooleanLiteral(expr) => expr.token.span.clone(),
+            ASTExpressionKind::FloatingLiteral(expr) => expr.token.span.clone(),
+            ASTExpressionKind::StringLiteral(expr) => expr.token.span.clone(),
+            ASTExpressionKind::Unary(expr) => {
+                let operator = expr.operator.token.span.clone();
+                let operand = ast.query_expression(expr.expr).span(ast);
+                TextSpan::combine(vec![operator, operand])
+            }
+            ASTExpressionKind::Binary(expr) => {
+                let operator = expr.operator.token.span.clone();
+                let left = ast.query_expression(expr.left).span(ast);
+                let right = ast.query_expression(expr.right).span(ast);
+                TextSpan::combine(vec![left, operator, right])
+            }
+            ASTExpressionKind::Parenthesized(expr) => {
+                let inner = ast.query_expression(expr.expr).span(ast);
+                TextSpan::combine(vec![inner])
+            }
+            ASTExpressionKind::FunctionCall(expr) => {
+                let identifier = expr.identifier.span.clone();
+                let args = expr
+                    .arguments
+                    .iter()
+                    .map(|arg_id| ast.query_expression(*arg_id).span(ast))
+                    .collect::<Vec<TextSpan>>();
+                TextSpan::combine(
+                    vec![identifier]
+                        .into_iter()
+                        .chain(args.into_iter())
+                        .collect(),
+                )
+            }
+            ASTExpressionKind::Assignment(expr) => {
+                let identifier = expr.identifier.span.clone();
+                let value = ast.query_expression(expr.expr).span(ast);
+                TextSpan::combine(vec![identifier, value])
+            }
+            ASTExpressionKind::Variable(expr) => expr.identifier.span.clone(),
+            ASTExpressionKind::Error(span) => span.clone(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTIntegerExpression {
+    value: i64,
+    token: lexer::Token,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTBooleanExpression {
+    value: bool,
+    token: lexer::Token,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTFloatingExpression {
+    value: f64,
+    token: lexer::Token,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ASTStringExpression {
+    value: String,
+    token: lexer::Token,
 }
 
 #[derive(Clone, PartialEq)]

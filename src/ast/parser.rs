@@ -398,8 +398,8 @@ impl<'a> Parser<'a> {
         let token = self.consume().clone();
 
         return match token.kind {
-            TokenKind::Integer(i) => self.ast.integer(i),
-            TokenKind::Floating(i) => self.ast.float(i),
+            TokenKind::Integer(i) => self.ast.integer(i, token),
+            TokenKind::Floating(i) => self.ast.float(i, token),
             TokenKind::Identifier => {
                 if self.current_token().kind == TokenKind::LeftParen {
                     self.parse_function_call_expression()
@@ -415,11 +415,11 @@ impl<'a> Parser<'a> {
                     //     _ => return None,
                     // };
                 } else if token.name() == "false" {
-                    self.ast.boolean(false)
+                    self.ast.boolean(false, token)
                 } else if token.name() == "true" {
-                    self.ast.boolean(true)
+                    self.ast.boolean(true, token)
                 } else {
-                    self.ast.identifier(token.clone())
+                    self.ast.identifier(token)
                 }
             }
 
