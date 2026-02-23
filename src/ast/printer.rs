@@ -101,7 +101,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
             &format!(
                 "DataType: {}{}",
                 Fg(Self::TEXT_COLOR),
-                statement.data_type.span.literal
+                statement.type_annotation.data_type.span.literal
             ),
             &Self::TEXT_COLOR,
         );
@@ -124,7 +124,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
             &format!(
                 "DataType: {}{}",
                 Fg(Self::TEXT_COLOR),
-                statement.data_type.span.literal
+                statement.type_annotation.data_type.span.literal
             ),
             &Self::TEXT_COLOR,
         );
@@ -201,7 +201,7 @@ impl ASTVisitor<()> for ASTTreePrinter {
                     Self::FUNC_STATEMENT_ICON,
                     color::Fg(Self::TEXT_COLOR),
                     &arg.identifier.span.literal,
-                    &arg.data_type.span.literal
+                    &arg.type_annotation.data_type.span.literal
                 ),
                 &Self::TEXT_COLOR,
             );
@@ -498,7 +498,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.print(&format!(
             ": {}{}",
             Fg(Self::TYPE_COLOR),
-            statement.data_type.span.literal
+            statement.type_annotation.data_type.span.literal
         ));
         self.add_whitespace();
         self.print(&format!("{}=", Fg(Self::TEXT_COLOR)));
@@ -515,7 +515,7 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
         self.print(&format!(
             ": {}{}",
             Fg(Self::TYPE_COLOR),
-            statement.data_type.span.literal
+            statement.type_annotation.data_type.span.literal
         ));
         self.add_whitespace();
         self.print(&format!("{}=", Fg(Self::TEXT_COLOR)));
@@ -605,15 +605,19 @@ impl ASTVisitor<()> for ASTHiglightPrinter {
                 Fg(Self::TEXT_COLOR),
                 arg.identifier.span.literal,
                 Fg(Self::TYPE_COLOR),
-                arg.data_type.span.literal,
+                arg.type_annotation.data_type.span.literal,
             ));
         }
 
-        self.print(&format!(
-            "{}) -> {} ",
-            Fg(Self::TEXT_COLOR),
-            function.return_type.name()
-        ));
+        self.print(&format!("{})", Fg(Self::TEXT_COLOR)));
+        if let Some(rt) = &function.return_type {
+            self.print(&format!(
+                " -> {}{} ",
+                Fg(Self::TYPE_COLOR),
+                rt.data_type.span.literal
+            ));
+        }
+
         self.visit_statement(ast, function.body);
         self.add_newline();
     }

@@ -1,5 +1,5 @@
 use crate::ast::lexer::{Lexer, Token, TokenKind};
-use crate::ast::{ASTExpression, ASTStatement, StmntId};
+use crate::ast::{ASTExpression, ASTFuncReturnTypeAnnotion, ASTStatement, StmntId};
 use crate::diagnostics::DiagnosticsCollection;
 use crate::diagnostics::DiagnosticsCollectionCell;
 use std::{
@@ -156,23 +156,31 @@ impl<'a> Parser<'a> {
     fn parse_let_statement(&mut self) -> Option<&ASTStatement> {
         self.consume_expected(TokenKind::Let)?;
         let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
-        self.consume_expected(TokenKind::Colon)?;
+        let colon = self.consume_expected(TokenKind::Colon)?.clone();
         let data_type = self.consume().clone();
         self.consume_expected(TokenKind::Equal)?;
         let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
-        self.ast.let_statement(identifier, data_type, expr)
+        self.ast.let_statement(
+            identifier,
+            super::ASTStaticTypeAnnotion { colon, data_type },
+            expr,
+        )
     }
 
     fn parse_var_statement(&mut self) -> Option<&ASTStatement> {
         self.consume_expected(TokenKind::Var)?;
         let identifier = self.consume_expected(TokenKind::Identifier)?.clone();
-        self.consume_expected(TokenKind::Colon)?;
+        let colon = self.consume_expected(TokenKind::Colon)?.clone();
         let data_type = self.consume().clone();
         self.consume_expected(TokenKind::Equal)?;
         let expr = self.parse_expression()?.id;
         self.consume_expected(TokenKind::SemiColon)?;
-        self.ast.var_statement(identifier, data_type, expr)
+        self.ast.var_statement(
+            identifier,
+            super::ASTStaticTypeAnnotion { colon, data_type },
+            expr,
+        )
     }
 
     fn parse_compound_statement(&mut self) -> Option<&ASTStatement> {
@@ -215,10 +223,13 @@ impl<'a> Parser<'a> {
 
             if self.current_token().kind == TokenKind::Identifier {
                 let identifier = self.consume().clone();
-                self.consume_expected(TokenKind::Colon)?;
+                let colon = self.consume_expected(TokenKind::Colon)?.clone();
                 arguments.push(FunctionArgumentDeclaration {
                     identifier,
-                    data_type: self.consume().clone(),
+                    type_annotation: super::ASTStaticTypeAnnotion {
+                        colon,
+                        data_type: self.consume().clone(),
+                    },
                 });
             } else {
                 self.diagnostics_colletion
@@ -241,17 +252,11 @@ impl<'a> Parser<'a> {
 
         // Return type is declared like `func foo() -> i32 {...}`
         let return_type = if self.current_token().kind == TokenKind::MinusRightAngleBracket {
-            self.consume_expected(TokenKind::MinusRightAngleBracket)?;
-            self.consume().clone()
+            let arrow = self.consume().clone();
+            let data_type = self.consume().clone();
+            Some(ASTFuncReturnTypeAnnotion { arrow, data_type })
         } else {
-            Token {
-                kind: TokenKind::Void,
-                span: TextSpan::new(
-                    right_paren.span.start,
-                    right_paren.span.end,
-                    "void".to_string(),
-                ),
-            }
+            None
         };
 
         let body = self.parse_compound_statement()?.id;

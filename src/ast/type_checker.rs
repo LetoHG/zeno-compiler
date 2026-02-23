@@ -123,13 +123,13 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             name: statement.identifier.name(),
             data_type: self
                 .type_table
-                .get_builtin_from_token(&statement.data_type)
+                .get_builtin_from_token(&statement.type_annotation.data_type)
                 .unwrap(),
         }));
         let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
         let actual = self
             .type_table
-            .get_builtin_from_token(&statement.data_type)
+            .get_builtin_from_token(&statement.type_annotation.data_type)
             .unwrap();
         if initialization_expr_type != actual {
             self.diagnostics.borrow_mut().report_custom_error(
@@ -165,13 +165,13 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             name: statement.identifier.name(),
             data_type: self
                 .type_table
-                .get_builtin_from_token(&statement.data_type)
+                .get_builtin_from_token(&statement.type_annotation.data_type)
                 .unwrap(),
         }));
         let initialization_expr_type: TypeId = self.visit_expression(ast, statement.initializer)?;
         let actual = self
             .type_table
-            .get_builtin_from_token(&statement.data_type)
+            .get_builtin_from_token(&statement.type_annotation.data_type)
             .unwrap();
         if initialization_expr_type != actual {
             self.diagnostics.borrow_mut().report_custom_error(
@@ -323,14 +323,18 @@ impl<'a> ASTVisitor<Option<TypeId>> for TypeChecker<'a> {
             // argument_types.push(arg.identifier.span.literal.clone());
             self.declare_local_identifier(Symbol::Variable(VariableInfo {
                 name: arg.identifier.name(),
-                data_type: self.type_table.get_builtin_from_token(&arg.data_type)?,
+                data_type: self
+                    .type_table
+                    .get_builtin_from_token(&arg.type_annotation.data_type)?,
             }));
         }
         self.symbol_table.function_stack.push(FunctionContext {
             name: function.identifier.name(),
-            return_type: self
-                .type_table
-                .get_builtin_from_token(&function.return_type)?,
+            return_type: function
+                .return_type
+                .as_ref()
+                .and_then(|t| self.type_table.get_builtin_from_token(&t.data_type))
+                .unwrap_or(0),
         });
         self.visit_statement(ast, function.body);
         self.symbol_table.function_stack.pop();

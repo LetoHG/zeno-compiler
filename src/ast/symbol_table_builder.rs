@@ -61,7 +61,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
             name: statement.identifier.name(),
             data_type: self
                 .type_table
-                .get_builtin_from_token(&statement.data_type)
+                .get_builtin_from_token(&statement.type_annotation.data_type)
                 .unwrap(),
         }));
         if !success {
@@ -77,7 +77,7 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
             name: statement.identifier.name(),
             data_type: self
                 .type_table
-                .get_builtin_from_token(&statement.data_type)
+                .get_builtin_from_token(&statement.type_annotation.data_type)
                 .unwrap(),
         }));
         if !success {
@@ -127,17 +127,18 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
             // argument_types.push(arg.identifier.span.literal.clone());
             argument_types.push(
                 self.type_table
-                    .get_builtin_from_token(&arg.data_type)
+                    .get_builtin_from_token(&arg.type_annotation.data_type)
                     .unwrap(),
             );
         }
         let success = self.declare_global_identifier(Symbol::Function(FunctionInfo {
             name: function.identifier.name(),
             parameters: argument_types,
-            return_type: self
-                .type_table
-                .get_builtin_from_token(&function.return_type)
-                .unwrap(),
+            return_type: function
+                .return_type
+                .as_ref()
+                .and_then(|t| self.type_table.get_builtin_from_token(&t.data_type))
+                .unwrap_or(0),
         }));
         if !success {
             self.diagnostics.borrow_mut().report_custom_error(
@@ -192,22 +193,25 @@ impl<'a> ASTVisitor<()> for SymbolTableBuilder<'a> {
     fn visit_binary_operator(&mut self, _op: &super::ASTBinaryOperator) {}
     fn visit_error(&mut self, _span: &super::lexer::TextSpan) {}
 
-     fn visit_integer(
+    fn visit_integer(
         &mut self,
         _ast: &mut Ast,
         _int_expr: &super::ASTIntegerExpression,
         _expr: &super::ASTExpression,
-     ){}
+    ) {
+    }
     fn visit_boolean(
         &mut self,
         _ast: &mut Ast,
         _bool_expr: &super::ASTBooleanExpression,
         _expr: &super::ASTExpression,
-    ){}
+    ) {
+    }
     fn visit_float(
         &mut self,
         _ast: &mut Ast,
         _float_expr: &super::ASTFloatingExpression,
         _expr: &super::ASTExpression,
-    ){}
+    ) {
+    }
 }

@@ -86,12 +86,12 @@ impl Ast {
     fn let_statement(
         &mut self,
         identifier: Token,
-        data_type: Token,
+        type_annotation: ASTStaticTypeAnnotion,
         initializer: ExprId,
     ) -> Option<&ASTStatement> {
         self.add_stmnt(ASTStatementKind::Let(ASTLetStatement {
             identifier,
-            data_type,
+            type_annotation,
             initializer,
         }))
     }
@@ -99,12 +99,12 @@ impl Ast {
     fn var_statement(
         &mut self,
         identifier: Token,
-        data_type: Token,
+        type_annotation: ASTStaticTypeAnnotion,
         initializer: ExprId,
     ) -> Option<&ASTStatement> {
         self.add_stmnt(ASTStatementKind::Var(ASTVarStatement {
             identifier,
-            data_type,
+            type_annotation,
             initializer,
         }))
     }
@@ -170,7 +170,7 @@ impl Ast {
         identifier: Token,
         arguments: Vec<FunctionArgumentDeclaration>,
         body: StmntId,
-        return_type: Token,
+        return_type: Option<ASTFuncReturnTypeAnnotion>,
     ) -> Option<&ASTStatement> {
         self.add_stmnt(ASTStatementKind::FuncDecl(ASTFunctionStatement {
             identifier,
@@ -392,16 +392,40 @@ pub enum ASTStatementKind {
 }
 
 #[derive(Clone)]
+pub struct ASTFuncReturnTypeAnnotion {
+    arrow: Token,
+    data_type: Token,
+}
+
+impl ASTFuncReturnTypeAnnotion {
+    pub fn new(arrow: Token, data_type: Token) -> Self {
+        Self { arrow, data_type }
+    }
+}
+
+#[derive(Clone)]
+pub struct ASTStaticTypeAnnotion {
+    colon: Token,
+    data_type: Token,
+}
+
+impl ASTStaticTypeAnnotion {
+    pub fn new(colon: Token, data_type: Token) -> Self {
+        Self { colon, data_type }
+    }
+}
+
+#[derive(Clone)]
 pub struct ASTLetStatement {
     identifier: Token,
-    data_type: Token,
+    type_annotation: ASTStaticTypeAnnotion,
     initializer: ExprId,
 }
 
 #[derive(Clone)]
 pub struct ASTVarStatement {
     identifier: Token,
-    data_type: Token,
+    type_annotation: ASTStaticTypeAnnotion,
     initializer: ExprId,
 }
 
@@ -420,7 +444,7 @@ pub struct ASTCompoundStatement {
 #[derive(Clone)]
 pub struct FunctionArgumentDeclaration {
     identifier: Token,
-    data_type: Token,
+    type_annotation: ASTStaticTypeAnnotion,
 }
 
 #[derive(Clone)]
@@ -428,7 +452,7 @@ pub struct ASTFunctionStatement {
     identifier: Token,
     arguments: Vec<FunctionArgumentDeclaration>,
     body: StmntId,
-    return_type: Token,
+    return_type: Option<ASTFuncReturnTypeAnnotion>,
 }
 
 #[derive(Clone)]
@@ -436,6 +460,7 @@ pub struct ASTElseStatement {
     else_keyword: Token,
     else_branch: StmntId,
 }
+
 #[derive(Clone)]
 pub struct ASTIfStatement {
     keyword: Token,
@@ -470,111 +495,44 @@ impl ASTStatement {
         Self { kind, id }
     }
 
-    fn expression(expr_id: ExprId) -> Self {
-        Self {
-            kind: ASTStatementKind::Expr(expr_id),
-            id: 0,
-        }
-    }
+    fn span(&self, ast: &Ast) -> TextSpan {
+        match &self.kind {
+            ASTStatementKind::Expr(expr) => ast.query_expression(*expr).span(ast),
+            ASTStatementKind::Let(statement) => TextSpan::combine(vec![
+                statement.identifier.span.clone(),
+                statement.type_annotation.data_type.span.clone(),
+                ast.query_expression(statement.initializer).span(ast),
+            ]),
 
-    fn return_statement(keyword: Token, expr: ExprId) -> Self {
-        Self {
-            kind: ASTStatementKind::Return(ASTReturnStatement { keyword, expr }),
-            id: 0,
-        }
-    }
-    fn let_statement(identifier: Token, data_type: Token, initializer: ExprId) -> Self {
-        Self {
-            kind: ASTStatementKind::Let(ASTLetStatement {
-                identifier,
-                data_type,
-                initializer,
-            }),
-            id: 0,
-        }
-    }
-
-    fn var_statement(identifier: Token, data_type: Token, initializer: ExprId) -> Self {
-        Self {
-            kind: ASTStatementKind::Var(ASTVarStatement {
-                identifier,
-                data_type,
-                initializer,
-            }),
-            id: 0,
-        }
-    }
-
-    fn compound(statements: Vec<StmntId>, start_brace: Token, end_brace: Token) -> Self {
-        Self {
-            kind: ASTStatementKind::Compound(ASTCompoundStatement {
-                statements,
-                start_brace,
-                end_brace,
-            }),
-            id: 0,
-        }
-    }
-
-    fn conditional(
-        keyword: Token,
-        condition: ExprId,
-        then_branch: ASTStatement,
-        else_branch: Option<ASTElseStatement>,
-    ) -> Self {
-        Self {
-            kind: ASTStatementKind::If(ASTIfStatement {
-                keyword,
-                condition,
-                then_branch: then_branch.id,
-                else_branch,
-            }),
-            id: 0,
-        }
-    }
-
-    fn while_loop(keyword: Token, condition: ExprId, body: ASTStatement) -> Self {
-        Self {
-            kind: ASTStatementKind::While(ASTWhileStatement {
-                keyword,
-                condition,
-                body: body.id,
-            }),
-            id: 0,
-        }
-    }
-
-    fn for_loop(
-        keyword: Token,
-        loop_variable: Token,
-        range: (ExprId, ExprId),
-        body: ASTStatement,
-    ) -> Self {
-        Self {
-            kind: ASTStatementKind::For(ASTForStatement {
-                keyword,
-                loop_variable,
-                range,
-                body: body.id,
-            }),
-            id: 0,
-        }
-    }
-
-    fn function(
-        identifier: Token,
-        arguments: Vec<FunctionArgumentDeclaration>,
-        body: ASTStatement,
-        return_type: Token,
-    ) -> Self {
-        Self {
-            kind: ASTStatementKind::FuncDecl(ASTFunctionStatement {
-                identifier,
-                arguments,
-                body: body.id,
-                return_type,
-            }),
-            id: 0,
+            ASTStatementKind::Var(statement) => TextSpan::combine(vec![
+                statement.identifier.span.clone(),
+                statement.type_annotation.data_type.span.clone(),
+                ast.query_expression(statement.initializer).span(ast),
+            ]),
+            ASTStatementKind::Return(statement) => TextSpan::combine(vec![
+                statement.keyword.span.clone(),
+                ast.query_expression(statement.expr).span(ast),
+            ]),
+            ASTStatementKind::Compound(statement) => TextSpan::combine(vec![
+                statement.start_brace.span.clone(),
+                statement.end_brace.span.clone(),
+            ]),
+            ASTStatementKind::FuncDecl(statement) => TextSpan::combine(vec![
+                statement.identifier.span.clone(),
+                TextSpan::combine(
+                    statement
+                        .arguments
+                        .iter()
+                        .map(|arg| {
+                            TextSpan::combine(vec![
+                                arg.identifier.span.clone(),
+                                arg.type_annotation.data_type.span.clone(),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ]),
+            _ => todo!(),
         }
     }
 }
